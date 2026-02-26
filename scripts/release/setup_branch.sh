@@ -92,7 +92,7 @@ if curl -fs -H "Api-User: $evergreen_user" -H "Api-Key: $evergreen_api_key" \
   log ok "Evergreen project already exists, skipping creation."
 else
   copy_response=$(curl -fsSL -H "Api-User: $evergreen_user" -H "Api-Key: $evergreen_api_key" \
-     -X POST "$EVERGREEN_API/projects/lucene-mongot-release/copy?new_project=$project_name")
+     -X POST "$EVERGREEN_API/projects/lucene-mongot/copy?new_project=$project_name")
   copy_exitcode=$?
 
   if [ $copy_exitcode -ne 0 ]; then
