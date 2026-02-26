@@ -71,7 +71,7 @@ public class CheckLicensesPlugin extends LuceneGradlePlugin {
         Stream.of(
                 // Ignore all files in the scripts directory.
                 "scripts/**",
-          
+
                 // Ignore binary files. Previously we used apache rat, which had a 'binary guesser'
                 // but it's faster to just exclude by name (rather than scan the file).
                 "**/*.adoc",
