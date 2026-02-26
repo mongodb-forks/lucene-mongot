@@ -15,15 +15,23 @@
     limitations under the License.
 -->
 
+# Lucene-Mongot
+
+This is MongoDB's fork of [Apache Lucene](https://github.com/apache/lucene), maintained for use by
+[mongot](https://github.com/mongodb/mongot/).
+
+The `main` branch, development branches (e.g. `branch_10x`, `branch_10_3`, `branch_9_11`) and
+release tags (e.g. `releases/lucene/10.3.2`, `releases/lucene/9.11.1`) track upstream Lucene. 
+Mongot development branches (e.g. `mongot_9_11_1`) are created from uptream release tags and contain
+Mongot commits. See [scripts/release/](./scripts/release/) for the tooling that creates these 
+branches and their corresponding Evergreen projects.
+
 # Apache Lucene
 
 ![Lucene Logo](https://lucene.apache.org/theme/images/lucene/lucene_logo_green_300.png?v=0e493d7a)
 
 Apache Lucene is a high-performance, full-featured text search engine library
 written in Java.
-
-[![Build Status](https://ci-builds.apache.org/job/Lucene/job/Lucene-Artifacts-main/badge/icon?subject=Lucene)](https://ci-builds.apache.org/job/Lucene/job/Lucene-Artifacts-main/)
-[![Revved up by Develocity](https://img.shields.io/badge/Revved%20up%20by-Develocity-06A0CE?logo=Gradle&labelColor=02303A)](https://develocity.apache.org/scans?search.buildToolType=gradle&search.rootProjectNames=lucene-root)
 
 ## Online Documentation
 
@@ -52,15 +60,5 @@ We'll assume that you know how to get and set up the JDK - if you don't, then we
 
 ## Contributing
 
-Bug fixes, improvements and new features are always welcome!
-Please review the [Contributing to Lucene
-Guide](./CONTRIBUTING.md) for information on
-contributing.
-
-- Additional Developer Documentation: [dev-docs/](./dev-docs/)
-
-## Discussion and Support
-
-- [Users Mailing List](https://lucene.apache.org/core/discussion.html#java-user-list-java-userluceneapacheorg)
-- [Developers Mailing List](https://lucene.apache.org/core/discussion.html#developer-lists)
-- IRC: `#lucene` and `#lucene-dev` on freenode.net
+External contributions are currently not accepted in this repository. If you'd like to contribute to Lucene,
+please see the upstream project at <https://github.com/apache/lucene>.
