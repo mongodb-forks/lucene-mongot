@@ -23,7 +23,7 @@ variables:
     params:
       directory: src
 
-  # OpenJDK 25 from https://jdk.java.net/25/
+  # OpenJDK 21 from https://jdk.java.net/archive/
   - &setup_jdk
     command: shell.exec
     type: setup
@@ -33,7 +33,7 @@ variables:
       script: |
         set -euo pipefail
         ARCH=$(uname -m | sed 's/x86_64/x64/;s/arm64/aarch64/')
-        JDK_URL=$(printf "https://download.java.net/java/GA/jdk25.0.2/b1e0dfa218384cb9959bdcb897162d4e/10/GPL/openjdk-25.0.2_linux-%s_bin.tar.gz" "$ARCH")
+        JDK_URL=$(printf "https://download.java.net/java/GA/jdk21.0.2/f2283984656d49d69e91c558476027ac/13/GPL/openjdk-21.0.2_linux-%s_bin.tar.gz" "$ARCH")
         curl -fsSL -o /tmp/jdk.tar.gz "$JDK_URL"
         mkdir -p ${workdir}/java
         tar -xzf /tmp/jdk.tar.gz -C ${workdir}/java --strip-components=1
