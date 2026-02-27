@@ -7,32 +7,28 @@ traperr() {
 set -o errtrace
 trap traperr ERR
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-INIT_SCRIPT="${SCRIPT_DIR}/github-packages.init.gradle"
-
 usage() {
   echo
-  echo "Usage: ${BASH_SOURCE[0]} --version <version> --branch <branch> --modules <m1,m2,...>"
+  echo "Usage: ${BASH_SOURCE[0]} --version <version>"
   echo
-  echo "Builds and publishes specific Lucene modules from a mongot branch to GitHub Packages."
+  echo "Creates an Evergreen patch build that builds Lucene modules and uploads"
+  echo "unsigned artifacts to the development S3 bucket."
+  echo "Must be run from the release branch."
+  echo
+  echo "Modules are read from scripts/release/modules.conf. Edit that file to"
+  echo "change which modules are published."
+  echo
+  echo "For CDN (signed) releases, push a git tag matching 'releases/mongot/<version>'"
+  echo "instead — Evergreen will automatically build, sign, and upload."
   echo
   echo "Options:"
   echo "  --version   Maven version string (e.g. 10.3.2.1)"
-  echo "  --branch    Git branch to build from (e.g. mongot_10_3_2)"
-  echo "  --modules   Comma-separated list of modules to publish, using the Maven"
-  echo "              artifact suffix after 'lucene-' (e.g. core,analysis-common,facet)"
   echo
   echo "Examples:"
-  echo "  ${BASH_SOURCE[0]} --version 10.3.2.1 --branch mongot_10_3_2 --modules core,analysis-common,facet"
-  echo "  ${BASH_SOURCE[0]} --version 9.11.1.2 --branch mongot_9_11_1 --modules core,queries,sandbox"
+  echo "  ${BASH_SOURCE[0]} --version 10.3.2.1"
+  echo "  ${BASH_SOURCE[0]} --version 9.11.1.2"
   echo
-  echo "Available modules (subset — any publishable lucene subproject works):"
-  echo "  core, analysis-common, analysis-icu, analysis-kuromoji, analysis-morfologik,"
-  echo "  analysis-nori, analysis-phonetic, analysis-smartcn, analysis-stempel,"
-  echo "  backward-codecs, codecs, expressions, facet, highlighter, join, memory,"
-  echo "  misc, queries, queryparser, sandbox, test-framework"
-  echo
-  echo "Requires GITHUB_TOKEN to be set."
+  echo "Requires the 'evergreen' CLI to be installed and configured."
   exit 1
 }
 
@@ -53,28 +49,13 @@ log() {
   echo "$status $@"
 }
 
-# Maps a Maven artifact suffix (e.g. "analysis-common") to a Gradle subproject
-# path (e.g. ":lucene:analysis:common").
-module_to_gradle_path() {
-  local module="$1"
-  if [[ "$module" == analysis-* ]]; then
-    echo ":lucene:${module/analysis-/analysis:}"
-  else
-    echo ":lucene:${module}"
-  fi
-}
-
 # --- Parse arguments ---
 
 version=""
-branch=""
-modules_csv=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --version)  version="$2";      shift 2 ;;
-    --branch)   branch="$2";       shift 2 ;;
-    --modules)  modules_csv="$2";  shift 2 ;;
     --help|-h)  usage ;;
     *)
       log error "Unknown option: $1"
@@ -95,90 +76,65 @@ if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
   usage
 fi
 
-if [ -z "$branch" ]; then
-  log error "Missing --branch"
-  usage
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MODULES_CONF="${SCRIPT_DIR}/modules.conf"
+
+if [ ! -f "$MODULES_CONF" ]; then
+  log error "${MODULES_CONF} not found."
+  exit 1
 fi
 
-if [ -z "$modules_csv" ]; then
-  log error "Missing --modules"
-  usage
-fi
-
+modules_csv=$(grep -v '^\s*#' "$MODULES_CONF" | grep -v '^\s*$' | tr '\n' ',' | sed 's/,$//')
 IFS=',' read -ra modules <<< "$modules_csv"
 
 if [ ${#modules[@]} -eq 0 ]; then
-  log error "No modules specified."
-  usage
-fi
-
-if [ -z "${GITHUB_TOKEN:-}" ]; then
-  log error "GITHUB_TOKEN environment variable is not set."
+  log error "No modules listed in ${MODULES_CONF}."
   exit 1
 fi
 
-if [ ! -f "$INIT_SCRIPT" ]; then
-  log error "Gradle init script not found at ${INIT_SCRIPT}"
+if ! command -v evergreen &>/dev/null; then
+  log error "'evergreen' CLI not found. Install it from https://evergreen.mongodb.com/settings"
   exit 1
 fi
 
-# --- Set up a temporary worktree ---
+project="lucene-mongot"
 
-log status "Setting up worktree for branch '${branch}'..."
-worktree_dir=$(mktemp -d)
-cleanup() {
-  if [ -d "$worktree_dir" ]; then
-    log info "Cleaning up worktree at ${worktree_dir}..."
-    git worktree remove --force "$worktree_dir" 2>/dev/null || rm -rf "$worktree_dir"
-  fi
-}
-trap cleanup EXIT
+branch="$(git branch --show-current)"
 
-git worktree add "$worktree_dir" "$branch"
-log ok "Worktree created at ${worktree_dir}"
+# --- Summary ---
 
-# --- Build Gradle task list ---
+echo
+log status "Release configuration:"
+log info "  Version:  ${version}"
+log info "  Branch:   ${branch}"
+log info "  Modules:  ${modules_csv}"
+log info "  Project:  ${project}"
+echo
 
-gradle_tasks=()
+# --- Create Evergreen patch from the current branch ---
+
+log status "Creating Evergreen patch build..."
+
+evergreen patch \
+  --project "$project" \
+  --uncommitted \
+  --yes \
+  --finalize \
+  --browse \
+  --variants ubuntu2204-large \
+  --tasks publish-dev \
+  --param "release_version=${version}" \
+  --param "release_modules=${modules_csv}" \
+  --description "${branch} - Uploading lucene-mongot artifacts to S3"
+
+log ok "Evergreen patch created."
+echo
+log status "Next steps:"
+log info "  The Evergreen build will publish ${#modules[@]} module(s) to the dev S3 bucket."
+log info "  The artifact version will be ${version}-<build_id>."
+log info "  Find the full version under the 'Files' tab of the Evergreen task."
+echo
+log info "  Modules:"
 for module in "${modules[@]}"; do
-  gradle_path=$(module_to_gradle_path "$module")
-  task="${gradle_path}:publishJarsPublicationToGitHubPackagesRepository"
-  gradle_tasks+=("$task")
-  log info "Will publish: lucene-${module} (${gradle_path})"
+  log info "    ${module}"
 done
-
-# --- Publish ---
-
-echo
-log status "Publishing ${#modules[@]} module(s) as version ${version}..."
-
-(
-  cd "$worktree_dir"
-  ./gradlew "${gradle_tasks[@]}" \
-    --init-script "$INIT_SCRIPT" \
-    -Pversion.release="$version"
-)
-
-# --- Tag the release ---
-
-tag="v${version}"
-echo
-log status "Tagging branch '${branch}' as '${tag}'..."
-
-if git rev-parse "${tag}" >/dev/null 2>&1; then
-  log error "Tag '${tag}' already exists. Skipping tag creation."
-else
-  modules_list=$(IFS=','; echo "${modules[*]}")
-  git tag -a "$tag" "$branch" \
-    -m "Lucene ${version} — published modules: ${modules_list}"
-  git push origin "$tag"
-  log ok "Tag '${tag}' pushed to origin."
-fi
-
-echo
-log ok "Published ${#modules[@]} module(s) to GitHub Packages:"
-for module in "${modules[@]}"; do
-  log ok "  org.apache.lucene:lucene-${module}:${version}"
-done
-echo
-log ok "Packages: https://github.com/mongodb-forks/lucene-mongot/packages"

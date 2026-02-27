@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-set -e
-set -o pipefail
+set -euo pipefail
 
 traperr() {
   echo "ERROR: ${BASH_SOURCE[1]} at about line ${BASH_LINENO[0]}"
@@ -14,8 +13,8 @@ usage() {
   echo "  e.g. ${BASH_SOURCE[0]} 10.3.0 releases/lucene/10.3.0"
   echo
   echo "Creates a development branch (mongot_<M>_<m>_<p>) from a Lucene"
-  echo "release tag, commits .evergreen.yml from main, pushes the branch,"
-  echo "and creates an Evergreen project."
+  echo "release tag, commits .evergreen.yml and scripts/release/ from HEAD,"
+  echo "pushes the branch, and creates an Evergreen project."
   exit 1
 }
 
@@ -130,17 +129,31 @@ log status "Creating git branch '${branch_name}'..."
 if git show-ref --quiet "refs/heads/${branch_name}"; then
   log ok "Branch already exists, skipping create."
 else
-  # Build a commit that adds .evergreen.yml from main onto the release tag,
-  # then point the new branch at that commit. This avoids checking out the
-  # branch and touching the working tree.
-  evg_blob=$(git rev-parse "main:.evergreen.yml")
-  base_tree=$(git rev-parse "${release_tag}^{tree}")
-  new_tree=$( (git ls-tree "$base_tree" | grep -v $'\t'".evergreen.yml$"
-               echo -e "100644 blob ${evg_blob}\t.evergreen.yml") | git mktree )
-  new_commit=$(git commit-tree "$new_tree" \
+  # Build a commit that layers .evergreen.yml and scripts/release/ from the
+  # current branch onto the release tag. Uses a temporary index to handle
+  # subdirectories without checking out the branch.
+  tmp_index=$(mktemp)
+
+  GIT_INDEX_FILE="$tmp_index" git read-tree "${release_tag}^{tree}"
+
+  evg_blob=$(git rev-parse "HEAD:.evergreen.yml")
+  GIT_INDEX_FILE="$tmp_index" git update-index --add \
+    --cacheinfo 100644,"${evg_blob}",".evergreen.yml"
+
+  while IFS=$'\t' read -r meta path; do
+    mode=$(echo "$meta" | cut -d' ' -f1)
+    blob=$(echo "$meta" | cut -d' ' -f3)
+    GIT_INDEX_FILE="$tmp_index" git update-index --add \
+      --cacheinfo "${mode},${blob},${path}"
+  done < <(git ls-tree -r HEAD -- scripts/release/)
+
+  new_tree=$(GIT_INDEX_FILE="$tmp_index" git write-tree)
+
+  new_commit=$(git commit-tree -S "$new_tree" \
     -p "$(git rev-parse "${release_tag}^{}")" \
-    -m "Add .evergreen.yml from main for Evergreen CI")
+    -m "Add .evergreen.yml and scripts/release/ from main for Evergreen CI")
   git branch "$branch_name" "$new_commit"
+  rm -f "$tmp_index"
 fi
 
 log "Pushing '${branch_name}' to origin..."

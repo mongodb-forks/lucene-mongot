@@ -1,0 +1,22 @@
+// Gradle init script that adds a local file-based Maven repository for staging
+// artifacts before S3 upload. Applied by build_artifacts.sh via --init-script.
+//
+// Requires MAVEN_STAGING_DIR environment variable.
+
+allprojects {
+    afterEvaluate {
+        def publishing = extensions.findByType(org.gradle.api.publish.PublishingExtension)
+        if (publishing) {
+            def stagingDir = System.getenv('MAVEN_STAGING_DIR')
+            if (!stagingDir) {
+                throw new GradleException('MAVEN_STAGING_DIR environment variable is required')
+            }
+            publishing.repositories {
+                maven {
+                    name = 'Staging'
+                    url = uri(file(stagingDir))
+                }
+            }
+        }
+    }
+}
