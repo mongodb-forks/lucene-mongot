@@ -142,9 +142,13 @@ functions:
             exit 1
           fi
           MODULES=$(grep -v '^\s*#' scripts/release/modules.conf | grep -v '^\s*$' | tr '\n' ',' | sed 's/,$//')
+          if [ -z "$MODULES" ]; then
+            echo "ERROR: no modules found in scripts/release/modules.conf"
+            exit 1
+          fi
           IFS=',' read -ra mod_array <<< "$MODULES"
           for mod in "${mod_array[@]}"; do
-            if [[ "$mod" != lucene-* ]]; then
+            if [ -n "$mod" ] && [[ "$mod" != lucene-* ]]; then
               echo "ERROR: module '$mod' in modules.conf must start with 'lucene-'"
               exit 1
             fi
@@ -165,11 +169,14 @@ functions:
         shell: bash
         script: |
           set -euo pipefail
-          if [ -z "${release_version:-}" ]; then
+          # Capture Evergreen expansions into shell variables first — bash
+          # default-value syntax (:-) conflicts with Evergreen's ${} engine.
+          RELEASE_VERSION="${release_version}"
+          if [ -z "$RELEASE_VERSION" ]; then
             echo "ERROR: release_version parameter is not set. Pass it via --param release_version=N.N.N-N"
             exit 1
           fi
-          VERSION="${release_version}-${version_id}"
+          VERSION="$RELEASE_VERSION-${version_id}"
           echo "release_version: $VERSION" > ${workdir}/dev_expansions.yml
           echo "Dev build — version: $VERSION"
           cat ${workdir}/dev_expansions.yml
