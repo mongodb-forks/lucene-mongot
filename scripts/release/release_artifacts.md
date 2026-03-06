@@ -2,14 +2,25 @@
 
 ## CDN release (signed)
 
-Push a git tag matching `releases/mongot/<version>` to trigger a signed CDN release.
-Evergreen will automatically build the modules, GPG-sign every JAR, POM, and Gradle
-module metadata file with Garasign, and upload everything to the CDN origin bucket.
+CDN releases must be triggered from a **mongot development branch** (e.g.
+`mongot_9_11_1`). Create one with
+[`scripts/release/setup_branch.sh`](scripts/release/setup_branch.sh), which also
+creates a dedicated Evergreen project that runs CI on PRs against the branch. That
+Evergreen project is configured with a git tag trigger that automatically activates the
+`publish-cdn` task when you push a matching tag. You can monitor the release from the
+project waterfall — for example:
+<https://spruce.corp.mongodb.com/project/lucene-mongot-9.11.1/waterfall>
+
+To trigger a release, push a git tag matching `releases/mongot/<version>`:
 
 ```shell
 git tag releases/mongot/10.3.2-1
 git push origin releases/mongot/10.3.2-1
 ```
+
+Evergreen will automatically build the modules, GPG-sign every JAR, POM, and Gradle
+module metadata file with Garasign, and upload everything to the CDN origin bucket.
+Published artifacts are served at `downloads.mongodb.com/lucene-mongot/`.
 
 **Version format**: Versions must use the `N.N.N-N` format (e.g. `10.3.2-1`), where
 `N.N.N` is the upstream Lucene release and `-N` is the mongot patch number. Do **not**
