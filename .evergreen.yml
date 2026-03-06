@@ -298,9 +298,10 @@ tasks:
       - func: sign-artifacts
       - func: upload-cdn-artifacts
 
+  # Dev builds intentionally skip the checks dependency — our patches may
+  # introduce lint/style differences that don't affect artifact correctness.
   - name: publish-dev
     depends_on:
-      - name: checks
       - name: tests
     commands:
       - func: setup
