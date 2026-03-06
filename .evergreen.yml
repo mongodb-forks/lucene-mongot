@@ -142,6 +142,13 @@ functions:
             exit 1
           fi
           MODULES=$(grep -v '^\s*#' scripts/release/modules.conf | grep -v '^\s*$' | tr '\n' ',' | sed 's/,$//')
+          IFS=',' read -ra mod_array <<< "$MODULES"
+          for mod in "${mod_array[@]}"; do
+            if [[ "$mod" != lucene-* ]]; then
+              echo "ERROR: module '$mod' in modules.conf must start with 'lucene-'"
+              exit 1
+            fi
+          done
           echo "release_version: $VERSION" > ${workdir}/tag_expansions.yml
           echo "release_modules: $MODULES" >> ${workdir}/tag_expansions.yml
           echo "Tag trigger — version: $VERSION, modules: $MODULES"
@@ -158,6 +165,10 @@ functions:
         shell: bash
         script: |
           set -euo pipefail
+          if [ -z "${release_version:-}" ]; then
+            echo "ERROR: release_version parameter is not set. Pass it via --param release_version=N.N.N-N"
+            exit 1
+          fi
           VERSION="${release_version}-${version_id}"
           echo "release_version: $VERSION" > ${workdir}/dev_expansions.yml
           echo "Dev build — version: $VERSION"
@@ -210,14 +221,15 @@ functions:
           find . -type f \( -name '*.jar' -o -name '*.pom' -o -name '*.module' \) | sort
           echo ""
 
+          STAGING="$(pwd)"
           docker run \
-            --env-file ${workdir}/signing-envfile \
+            --env-file "${workdir}/signing-envfile" \
             --rm \
-            -v $(pwd):$(pwd) \
-            -w $(pwd) \
+            -v "${STAGING}:${STAGING}" \
+            -w "${STAGING}" \
             901841024863.dkr.ecr.us-east-1.amazonaws.com/release-infrastructure/garasign-gpg \
             /bin/bash -c "gpgloader && \
-              for f in \$(find $(pwd) -type f \( -name '*.jar' -o -name '*.pom' -o -name '*.module' \)); do \
+              for f in \$(find '${STAGING}' -type f \( -name '*.jar' -o -name '*.pom' -o -name '*.module' \)); do \
                 echo \"Signing \$f...\" && \
                 gpg --yes -v --armor -o \"\$f.asc\" --detach-sign \"\$f\"; \
               done"
@@ -277,6 +289,7 @@ tasks:
   - name: publish-cdn
     tags: ["release"]
     depends_on:
+      - name: checks
       - name: tests
     commands:
       - func: setup
@@ -287,6 +300,7 @@ tasks:
 
   - name: publish-dev
     depends_on:
+      - name: checks
       - name: tests
     commands:
       - func: setup

@@ -137,6 +137,7 @@ evergreen patch \
   --finalize \
   --browse \
   --variants ubuntu2204-large \
+  --tasks checks \
   --tasks tests_and_cleanup \
   --tasks publish-dev \
   --param "release_version=${version}" \
