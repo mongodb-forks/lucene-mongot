@@ -277,7 +277,7 @@ tasks:
   - name: publish-cdn
     tags: ["release"]
     depends_on:
-      - name: tests_and_cleanup
+      - name: tests
     commands:
       - func: setup
       - func: set-release-expansions-from-tag
@@ -287,7 +287,7 @@ tasks:
 
   - name: publish-dev
     depends_on:
-      - name: tests_and_cleanup
+      - name: tests
     commands:
       - func: setup
       - func: set-dev-release-version
