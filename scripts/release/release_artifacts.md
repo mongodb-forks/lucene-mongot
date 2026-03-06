@@ -1,6 +1,28 @@
+<!--
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to You under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
 # Releasing Lucene-mongot Artifacts
 
 ## CDN release (signed)
+
+CDN artifacts are signed and can be accessed from:
+
+- https://downloads.mongodb.com/lucene-mongot/.
+
 
 CDN releases must be triggered from a **mongot development branch** (e.g.
 `mongot_9_11_1`). Create one with
@@ -20,7 +42,6 @@ git push origin releases/mongot/10.3.2-1
 
 Evergreen will automatically build the modules, GPG-sign every JAR, POM, and Gradle
 module metadata file with Garasign, and upload everything to the CDN origin bucket.
-Published artifacts are served at `downloads.mongodb.com/lucene-mongot/`.
 
 **Version format**: Versions must use the `N.N.N-N` format (e.g. `10.3.2-1`), where
 `N.N.N` is the upstream Lucene release and `-N` is the mongot patch number. Do **not**
