@@ -149,6 +149,7 @@ else
 
   new_tree=$(GIT_INDEX_FILE="$tmp_index" git write-tree)
 
+  # -S requires GPG signing to be configured in git (gpg key + user.signingkey).
   new_commit=$(git commit-tree -S "$new_tree" \
     -p "$(git rev-parse "${release_tag}^{}")" \
     -m "Add .evergreen.yml and scripts/release/ from main for Evergreen CI")

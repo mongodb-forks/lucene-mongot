@@ -7,7 +7,7 @@
 #
 # Expected environment variables (set by Evergreen via env):
 #   JAVA_HOME           — path to the JDK
-#   RELEASE_VERSION     — Maven version string  (e.g. 9.11.1.1)
+#   RELEASE_VERSION     — Maven version string  (e.g. 9.11.1-1)
 #   RELEASE_MODULES     — comma-separated list   (e.g. lucene-core,lucene-backward-codecs)
 #   MAVEN_STAGING_DIR   — output directory for staged Maven artifacts
 set -euo pipefail
@@ -31,6 +31,10 @@ mkdir -p "$MAVEN_STAGING_DIR"
 IFS=',' read -ra modules <<< "$RELEASE_MODULES"
 gradle_tasks=()
 for module in "${modules[@]}"; do
+  if [[ "$module" != lucene-* ]]; then
+    echo "ERROR: module '$module' must start with 'lucene-' (check modules.conf)"
+    exit 1
+  fi
   short="${module#lucene-}"
   if [[ "$short" == analysis-* ]]; then
     gradle_path=":lucene:${short/analysis-/analysis:}"

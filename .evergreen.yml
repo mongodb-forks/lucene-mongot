@@ -19,7 +19,7 @@ ignore:
 
 parameters:
   - key: release_version
-    description: Maven version string for the release (e.g. 10.3.2.1)
+    description: "Maven version in N.N.N-N format (e.g. 10.3.2-1). Do not use dots for the patch segment — Lucene's version parser assumes three numeric components."
   - key: release_modules
     description: Comma-separated modules to publish (e.g. lucene-core,lucene-analysis-common,lucene-facet)
 
@@ -74,7 +74,7 @@ functions:
     - *setup_jdk
 
   # Runs all validation checks without tests.
-  # This is equivalent to the [Run gradle check (without tests)](hhttps://github.com/apache/lucene/blob/main/.github/workflows/run-checks-all.yml#L93-L94) Github Actions workflow from Lucene upstream.
+  # This is equivalent to the [Run gradle check (without tests)](https://github.com/apache/lucene/blob/main/.github/workflows/run-checks-all.yml#L93-L94) Github Actions workflow from Lucene upstream.
   # TODO (tianxiao): consider adding the validation tools (eclint, ast-grep) that Gradle check optionally uses.
   run-checks:
     - command: subprocess.exec
@@ -121,6 +121,9 @@ functions:
       params:
         file: src/lucene/**/build/test-results/test/TEST-*.xml
 
+  # Extracts the release version and modules from the git tag.
+  # Only used by publish-cdn, which is triggered by pushing a tag
+  # matching releases/mongot/<version>.
   set-release-expansions-from-tag:
     - command: shell.exec
       params:
@@ -129,21 +132,39 @@ functions:
         script: |
           set -euo pipefail
           TAG="${triggered_by_git_tag}"
-          if [ -n "$TAG" ]; then
-            VERSION=$(echo "$TAG" | sed 's|^releases/mongot/||')
-            MODULES=$(grep -v '^\s*#' scripts/release/modules.conf | grep -v '^\s*$' | tr '\n' ',' | sed 's/,$//')
-            echo "release_version: $VERSION" > ${workdir}/tag_expansions.yml
-            echo "release_modules: $MODULES" >> ${workdir}/tag_expansions.yml
-            echo "Tag trigger — version: $VERSION"
-          else
-            VERSION="${release_version}-${version_id}"
-            echo "release_version: $VERSION" > ${workdir}/tag_expansions.yml
-            echo "Manual patch — version: $VERSION"
+          if [ -z "$TAG" ]; then
+            echo "ERROR: publish-cdn requires a git tag trigger (releases/mongot/<version>)"
+            exit 1
           fi
+          VERSION=$(echo "$TAG" | sed 's|^releases/mongot/||')
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]; then
+            echo "ERROR: version from tag must be in N.N.N-N format (got: $VERSION)"
+            exit 1
+          fi
+          MODULES=$(grep -v '^\s*#' scripts/release/modules.conf | grep -v '^\s*$' | tr '\n' ',' | sed 's/,$//')
+          echo "release_version: $VERSION" > ${workdir}/tag_expansions.yml
+          echo "release_modules: $MODULES" >> ${workdir}/tag_expansions.yml
+          echo "Tag trigger — version: $VERSION, modules: $MODULES"
           cat ${workdir}/tag_expansions.yml
     - command: expansions.update
       params:
         file: ${workdir}/tag_expansions.yml
+
+  # Appends the Evergreen version_id to the supplied release_version so that
+  # every dev build produces a unique Maven version (e.g. 9.11.0-1-abc123def).
+  set-dev-release-version:
+    - command: shell.exec
+      params:
+        shell: bash
+        script: |
+          set -euo pipefail
+          VERSION="${release_version}-${version_id}"
+          echo "release_version: $VERSION" > ${workdir}/dev_expansions.yml
+          echo "Dev build — version: $VERSION"
+          cat ${workdir}/dev_expansions.yml
+    - command: expansions.update
+      params:
+        file: ${workdir}/dev_expansions.yml
 
   build-artifacts:
     - command: subprocess.exec
@@ -182,6 +203,7 @@ functions:
         shell: bash
         script: |
           set -euo pipefail
+          trap 'echo "Cleaning up signing credentials..."; rm -f ${workdir}/signing-envfile' EXIT
           cd ${workdir}/maven-staging
 
           echo "Files to sign:"
@@ -204,8 +226,6 @@ functions:
           echo "Signed artifacts:"
           find . -name '*.asc' -type f | sort
 
-          rm -f ${workdir}/signing-envfile
-
   upload-cdn-artifacts:
     - command: s3.put
       params:
@@ -222,6 +242,7 @@ functions:
         skip_existing: true
         permissions: private
 
+  # public-read so mongot builds can fetch artifacts without AWS auth.
   upload-dev-artifacts:
     - command: s3.put
       params:
@@ -251,6 +272,8 @@ tasks:
       - func: setup
       - func: run-tests
 
+  # Activated by a git tag trigger (releases/mongot/*) configured in the
+  # Evergreen project settings — not in this YAML.
   - name: publish-cdn
     tags: ["release"]
     depends_on:
@@ -263,8 +286,11 @@ tasks:
       - func: upload-cdn-artifacts
 
   - name: publish-dev
+    depends_on:
+      - name: tests_and_cleanup
     commands:
       - func: setup
+      - func: set-dev-release-version
       - func: build-artifacts
       - func: sign-artifacts
       - func: upload-dev-artifacts

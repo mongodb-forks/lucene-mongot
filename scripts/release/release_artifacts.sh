@@ -11,8 +11,8 @@ usage() {
   echo
   echo "Usage: ${BASH_SOURCE[0]} --version <version>"
   echo
-  echo "Creates an Evergreen patch build that builds Lucene modules and uploads"
-  echo "unsigned artifacts to the development S3 bucket."
+  echo "Creates an Evergreen patch build that builds Lucene modules, signs them"
+  echo "with GPG (Garasign), and uploads them to the development S3 bucket."
   echo "Must be run from the release branch."
   echo
   echo "Modules are read from scripts/release/modules.conf. Edit that file to"
@@ -22,11 +22,11 @@ usage() {
   echo "instead — Evergreen will automatically build, sign, and upload."
   echo
   echo "Options:"
-  echo "  --version   Maven version string (e.g. 10.3.2.1)"
+  echo "  --version   Maven version string in N.N.N-N format (e.g. 10.3.2-1)"
   echo
   echo "Examples:"
-  echo "  ${BASH_SOURCE[0]} --version 10.3.2.1"
-  echo "  ${BASH_SOURCE[0]} --version 9.11.1.2"
+  echo "  ${BASH_SOURCE[0]} --version 10.3.2-1"
+  echo "  ${BASH_SOURCE[0]} --version 9.11.1-2"
   echo
   echo "Requires the 'evergreen' CLI to be installed and configured."
   exit 1
@@ -71,8 +71,8 @@ if [ -z "$version" ]; then
   usage
 fi
 
-if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-  log error "Version must start with major.minor.patch (got: ${version})"
+if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]; then
+  log error "Version must be in N.N.N-N format, e.g. 10.3.2-1 (got: ${version})"
   usage
 fi
 
@@ -115,6 +115,8 @@ echo
 
 log status "Creating Evergreen patch build..."
 
+# --uncommitted sends local working-tree changes so that edits to
+# modules.conf or other release scripts are picked up without committing.
 evergreen patch \
   --project "$project" \
   --uncommitted \
@@ -122,6 +124,7 @@ evergreen patch \
   --finalize \
   --browse \
   --variants ubuntu2204-large \
+  --tasks tests_and_cleanup \
   --tasks publish-dev \
   --param "release_version=${version}" \
   --param "release_modules=${modules_csv}" \
