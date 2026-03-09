@@ -17,13 +17,21 @@
 ignore:
   - "*.md"
 
+parameters:
+  - key: release_version
+    description: "Maven version in N.N.N-N format (e.g. 10.3.2-1). Do not use dots for the patch segment — Lucene's version parser assumes three numeric components."
+  - key: release_modules
+    description: Comma-separated modules to publish (e.g. lucene-core,lucene-analysis-common,lucene-facet)
+
 variables:
   - &fetch_source
     command: git.get_project
     params:
       directory: src
 
-  # OpenJDK 25 from https://jdk.java.net/25/
+  # Detects the required JDK from the Lucene source tree, then downloads it
+  # from the Adoptium API. Lucene 9.x/10.x need JDK 21; 11.x+ declares its
+  # minimum in gradle/libs.versions.toml (minJava).
   - &setup_jdk
     command: shell.exec
     type: setup
@@ -32,9 +40,31 @@ variables:
       shell: bash
       script: |
         set -euo pipefail
+
+        if [ -f build-options.properties ]; then
+          LUCENE_MAJOR=$(sed -n 's/^version\.base=\([0-9]*\).*/\1/p' build-options.properties)
+        else
+          LUCENE_MAJOR=$(sed -n "s/.*baseVersion *= *'\([0-9]*\).*/\1/p" build.gradle)
+        fi
+
+        if [ -z "$LUCENE_MAJOR" ]; then
+          echo "ERROR: could not detect Lucene major version from source tree"
+          exit 1
+        fi
+
+        echo "$LUCENE_MAJOR" > "${workdir}/.lucene-major"
+
+        JDK_MAJOR=21
+        if [ -f gradle/libs.versions.toml ]; then
+          maybe=$(sed -n 's/^minJava *= *"\([0-9]*\)".*/\1/p' gradle/libs.versions.toml)
+          [ -n "$maybe" ] && JDK_MAJOR="$maybe"
+        fi
+
+        echo "Lucene $LUCENE_MAJOR.x -> JDK $JDK_MAJOR"
+
         ARCH=$(uname -m | sed 's/x86_64/x64/;s/arm64/aarch64/')
-        JDK_URL=$(printf "https://download.java.net/java/GA/jdk25.0.2/b1e0dfa218384cb9959bdcb897162d4e/10/GPL/openjdk-25.0.2_linux-%s_bin.tar.gz" "$ARCH")
-        curl -fsSL -o /tmp/jdk.tar.gz "$JDK_URL"
+        JDK_URL="https://api.adoptium.net/v3/binary/latest/$JDK_MAJOR/ga/linux/$ARCH/jdk/hotspot/normal/eclipse?project=jdk"
+        curl -fsSL -L -o /tmp/jdk.tar.gz "$JDK_URL"
         mkdir -p ${workdir}/java
         tar -xzf /tmp/jdk.tar.gz -C ${workdir}/java --strip-components=1
 
@@ -44,7 +74,7 @@ functions:
     - *setup_jdk
 
   # Runs all validation checks without tests.
-  # This is equivalent to the [Run gradle check (without tests)](hhttps://github.com/apache/lucene/blob/main/.github/workflows/run-checks-all.yml#L93-L94) Github Actions workflow from Lucene upstream.
+  # This is equivalent to the [Run gradle check (without tests)](https://github.com/apache/lucene/blob/main/.github/workflows/run-checks-all.yml#L93-L94) Github Actions workflow from Lucene upstream.
   # TODO (tianxiao): consider adding the validation tools (eclint, ast-grep) that Gradle check optionally uses.
   run-checks:
     - command: subprocess.exec
@@ -72,8 +102,17 @@ functions:
         args:
           - "-c"
           - |
+            set -euo pipefail
             export PATH="$JAVA_HOME/bin:$PATH"
-            ./gradlew displayGradleDiagnostics allOptions test \
+
+            LUCENE_MAJOR=$(cat "${workdir}/.lucene-major")
+
+            EXTRA_TASKS=""
+            if [ "${LUCENE_MAJOR:-0}" -ge 11 ] 2>/dev/null; then
+              EXTRA_TASKS="displayGradleDiagnostics allOptions"
+            fi
+
+            ./gradlew $EXTRA_TASKS test \
               "-Ptask.times=true" \
               "-Pvalidation.errorprone=false"
 
@@ -81,6 +120,163 @@ functions:
     - command: attach.xunit_results
       params:
         file: src/lucene/**/build/test-results/test/TEST-*.xml
+
+  # Extracts the release version and modules from the git tag.
+  # Only used by publish-cdn, which is triggered by pushing a tag
+  # matching releases/mongot/<version>.
+  set-release-expansions-from-tag:
+    - command: shell.exec
+      params:
+        working_dir: src
+        shell: bash
+        script: |
+          set -euo pipefail
+          TAG="${triggered_by_git_tag}"
+          if [ -z "$TAG" ]; then
+            echo "ERROR: publish-cdn requires a git tag trigger (releases/mongot/<version>)"
+            exit 1
+          fi
+          VERSION=$(echo "$TAG" | sed 's|^releases/mongot/||')
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]; then
+            echo "ERROR: version from tag must be in N.N.N-N format (got: $VERSION)"
+            exit 1
+          fi
+          MODULES=$(grep -v '^\s*#' scripts/release/modules.conf | grep -v '^\s*$' | tr '\n' ',' | sed 's/,$//')
+          if [ -z "$MODULES" ]; then
+            echo "ERROR: no modules found in scripts/release/modules.conf"
+            exit 1
+          fi
+          IFS=',' read -ra mod_array <<< "$MODULES"
+          for mod in "${mod_array[@]}"; do
+            if [ -n "$mod" ] && [[ "$mod" != lucene-* ]]; then
+              echo "ERROR: module '$mod' in modules.conf must start with 'lucene-'"
+              exit 1
+            fi
+          done
+          echo "release_version: $VERSION" > ${workdir}/tag_expansions.yml
+          echo "release_modules: $MODULES" >> ${workdir}/tag_expansions.yml
+          echo "Tag trigger — version: $VERSION, modules: $MODULES"
+          cat ${workdir}/tag_expansions.yml
+    - command: expansions.update
+      params:
+        file: ${workdir}/tag_expansions.yml
+
+  # Appends the Evergreen version_id to the supplied release_version so that
+  # every dev build produces a unique Maven version (e.g. 9.11.0-1-abc123def).
+  set-dev-release-version:
+    - command: shell.exec
+      params:
+        shell: bash
+        script: |
+          set -euo pipefail
+          # Capture Evergreen expansions into shell variables first — bash
+          # default-value syntax (:-) conflicts with Evergreen's ${} engine.
+          RELEASE_VERSION="${release_version}"
+          if [ -z "$RELEASE_VERSION" ]; then
+            echo "ERROR: release_version parameter is not set. Pass it via --param release_version=N.N.N-N"
+            exit 1
+          fi
+          VERSION="$RELEASE_VERSION-${version_id}"
+          echo "release_version: $VERSION" > ${workdir}/dev_expansions.yml
+          echo "Dev build — version: $VERSION"
+          cat ${workdir}/dev_expansions.yml
+    - command: expansions.update
+      params:
+        file: ${workdir}/dev_expansions.yml
+
+  build-artifacts:
+    - command: subprocess.exec
+      params:
+        working_dir: src
+        binary: bash
+        env:
+          JAVA_HOME: ${workdir}/java
+          RELEASE_VERSION: ${release_version}
+          RELEASE_MODULES: ${release_modules}
+          MAVEN_STAGING_DIR: ${workdir}/maven-staging
+        args:
+          - scripts/release/build_artifacts.sh
+
+  sign-artifacts:
+    - command: ec2.assume_role
+      display_name: Assume IAM role for ECR (garasign-gpg)
+      params:
+        role_arn: ${release_infra_ecr_ro_arn}
+    - command: shell.exec
+      display_name: Login to ECR and prepare signing envfile
+      params:
+        shell: bash
+        silent: true
+        include_expansions_in_env: [ AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN ]
+        script: |
+          set -euo pipefail
+          aws ecr get-login-password --region us-east-1 \
+            | docker login --username AWS --password-stdin \
+              901841024863.dkr.ecr.us-east-1.amazonaws.com
+          echo "GRS_CONFIG_USER1_USERNAME=${garasign_username}" >> ${workdir}/signing-envfile
+          echo "GRS_CONFIG_USER1_PASSWORD=${garasign_password}" >> ${workdir}/signing-envfile
+    - command: shell.exec
+      display_name: Sign artifacts with Garasign GPG
+      params:
+        shell: bash
+        script: |
+          set -euo pipefail
+          trap 'echo "Cleaning up signing credentials..."; rm -f ${workdir}/signing-envfile' EXIT
+          cd ${workdir}/maven-staging
+
+          echo "Files to sign:"
+          find . -type f \( -name '*.jar' -o -name '*.pom' -o -name '*.module' \) | sort
+          echo ""
+
+          STAGING="$(pwd)"
+          docker run \
+            --env-file "${workdir}/signing-envfile" \
+            --rm \
+            -v "${STAGING}:${STAGING}" \
+            -w "${STAGING}" \
+            901841024863.dkr.ecr.us-east-1.amazonaws.com/release-infrastructure/garasign-gpg \
+            /bin/bash -c "gpgloader && \
+              for f in \$(find '${STAGING}' -type f \( -name '*.jar' -o -name '*.pom' -o -name '*.module' \)); do \
+                echo \"Signing \$f...\" && \
+                gpg --yes -v --armor -o \"\$f.asc\" --detach-sign \"\$f\"; \
+              done"
+
+          echo ""
+          echo "Signed artifacts:"
+          find . -name '*.asc' -type f | sort
+
+  upload-cdn-artifacts:
+    - command: s3.put
+      params:
+        aws_key: ${cdn_origin_lucene_mongot_aws_key_id}
+        aws_secret: ${cdn_origin_lucene_mongot_aws_key_secret}
+        bucket: cdn-origin-lucene-mongot
+        region: us-east-1
+        local_files_include_filter:
+          - "**"
+        local_files_include_filter_prefix: maven-staging
+        preserve_path: true
+        remote_file: lucene-mongot/maven/
+        content_type: application/octet-stream
+        skip_existing: true
+        permissions: private
+
+  # public-read so mongot builds can fetch artifacts without AWS auth.
+  upload-dev-artifacts:
+    - command: s3.put
+      params:
+        aws_key: ${lucene_mongot_development_aws_key_id}
+        aws_secret: ${lucene_mongot_development_aws_key_secret}
+        bucket: lucene-mongot-development
+        region: us-west-1
+        local_files_include_filter:
+          - "**"
+        local_files_include_filter_prefix: maven-staging
+        preserve_path: true
+        remote_file: lucene-mongot/maven/
+        content_type: application/octet-stream
+        skip_existing: true
+        permissions: public-read
 
 tasks:
   - name: checks
@@ -94,6 +290,32 @@ tasks:
     commands:
       - func: setup
       - func: run-tests
+
+  # Activated by a git tag trigger (releases/mongot/*) configured in the
+  # Evergreen project settings — not in this YAML.
+  - name: publish-cdn
+    tags: ["release"]
+    depends_on:
+      - name: checks
+      - name: tests
+    commands:
+      - func: setup
+      - func: set-release-expansions-from-tag
+      - func: build-artifacts
+      - func: sign-artifacts
+      - func: upload-cdn-artifacts
+
+  # Dev builds intentionally skip the checks dependency — our patches may
+  # introduce lint/style differences that don't affect artifact correctness.
+  - name: publish-dev
+    depends_on:
+      - name: tests
+    commands:
+      - func: setup
+      - func: set-dev-release-version
+      - func: build-artifacts
+      - func: sign-artifacts
+      - func: upload-dev-artifacts
 
 task_groups:
   - name: tests_and_cleanup
@@ -111,6 +333,10 @@ buildvariants:
     tasks:
       - name: checks
       - name: tests_and_cleanup
+      - name: publish-cdn
+        activate: false
+      - name: publish-dev
+        activate: false
 
   - name: ubuntu2204-arm64-large
     display_name: "Lucene (ARM64)"
