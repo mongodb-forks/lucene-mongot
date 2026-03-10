@@ -44,10 +44,10 @@ import org.apache.lucene.store.IndexOutput;
  * [Mongot] Copy of {@code Lucene94FieldInfosFormat} with the writer pinned to format version 1
  * ({@code FORMAT_PARENT_FIELD}), producing {@code .fnm} files byte-compatible with Lucene 9.11.
  *
- * <p>Lucene 10.0 bumped the core format from v1 to v2 (adding a per-field
- * {@code DocValuesSkipIndexType} byte). A Lucene 9.11 reader rejects v2 via
- * {@link CodecUtil#checkIndexHeader}. This class is used by the restored {@link Lucene99Codec}
- * during the code-upgrade phase so that rollback to 9.11 is a binary swap without reindex.
+ * <p>Lucene 10.0 bumped the core format from v1 to v2 (adding a per-field {@code
+ * DocValuesSkipIndexType} byte). A Lucene 9.11 reader rejects v2 via {@link
+ * CodecUtil#checkIndexHeader}. This class is used by the restored {@link Lucene99Codec} during the
+ * code-upgrade phase so that rollback to 9.11 is a binary swap without reindex.
  *
  * <p>The reader accepts both v1 and v2 (identical to the core class). The writer always emits v1.
  * This class can be deleted once mongot switches to the latest codec.
@@ -440,6 +440,13 @@ public final class Lucene94FieldInfosFormatV1 extends FieldInfosFormat {
         // pack the DV type and hasNorms in one byte
         output.writeByte(docValuesByte(fi.getDocValuesType()));
         // [mongot] v1 omits the DocValuesSkipIndexType byte that the core v2 writer emits here
+        // Assert that the skip index type is none.
+        if (fi.docValuesSkipIndexType() != DocValuesSkipIndexType.NONE) {
+          throw new IllegalStateException(
+              "Lucene94FieldInfosFormatV1 does not support DocValuesSkipIndexType: "
+                  + fi.docValuesSkipIndexType() + " for field: " + fi.name);
+        }
+
         output.writeLong(fi.getDocValuesGen());
         output.writeMapOfStrings(fi.attributes());
         output.writeVInt(fi.getPointDimensionCount());
