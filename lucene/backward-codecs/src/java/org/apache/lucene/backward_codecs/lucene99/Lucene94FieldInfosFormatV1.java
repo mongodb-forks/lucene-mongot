@@ -444,7 +444,9 @@ public final class Lucene94FieldInfosFormatV1 extends FieldInfosFormat {
         if (fi.docValuesSkipIndexType() != DocValuesSkipIndexType.NONE) {
           throw new IllegalStateException(
               "Lucene94FieldInfosFormatV1 does not support DocValuesSkipIndexType: "
-                  + fi.docValuesSkipIndexType() + " for field: " + fi.name);
+                  + fi.docValuesSkipIndexType()
+                  + " for field: "
+                  + fi.name);
         }
 
         output.writeLong(fi.getDocValuesGen());
