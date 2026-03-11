@@ -25,6 +25,9 @@ import org.apache.lucene.codecs.FieldsProducer;
 import org.apache.lucene.codecs.MultiLevelSkipListWriter;
 import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.codecs.PostingsReaderBase;
+import org.apache.lucene.codecs.PostingsWriterBase;
+import org.apache.lucene.codecs.lucene90.blocktree.Lucene90BlockTreeTermsReader;
+import org.apache.lucene.codecs.lucene90.blocktree.Lucene90BlockTreeTermsWriter;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.SegmentReadState;
 import org.apache.lucene.index.SegmentWriteState;
@@ -92,8 +95,8 @@ import org.apache.lucene.util.packed.PackedInts;
  *   <dd><b>Term Dictionary</b>
  *       <p>The .tim file contains the list of terms in each field along with per-term statistics
  *       (such as docfreq) and pointers to the frequencies, positions, payload and skip data in the
- *       .doc, .pos, and .pay files. See Lucene90BlockTreeTermsWriter for more details on the
- *       format.
+ *       .doc, .pos, and .pay files. See {@link Lucene90BlockTreeTermsWriter} for more details on
+ *       the format.
  *       <p>NOTE: The term dictionary can plug into different postings implementations: the postings
  *       writer/reader are actually responsible for encoding and decoding the PostingsHeader and
  *       TermMetadata sections described here:
@@ -147,7 +150,7 @@ import org.apache.lucene.util.packed.PackedInts;
  * <dl>
  *   <dd><b>Term Index</b>
  *       <p>The .tip file contains an index into the term dictionary, so that it can be accessed
- *       randomly. See Lucene90BlockTreeTermsWriter for more details on the format.
+ *       randomly. See {@link Lucene90BlockTreeTermsWriter} for more details on the format.
  * </dl>
  *
  * <a id="Frequencies"></a>
@@ -372,9 +375,28 @@ public class Lucene99PostingsFormat extends PostingsFormat {
   static final int VERSION_START = 0;
   static final int VERSION_CURRENT = VERSION_START;
 
+  private final int minTermBlockSize;
+  private final int maxTermBlockSize;
+
   /** Creates {@code Lucene99PostingsFormat} with default settings. */
   public Lucene99PostingsFormat() {
+    this(
+        Lucene90BlockTreeTermsWriter.DEFAULT_MIN_BLOCK_SIZE,
+        Lucene90BlockTreeTermsWriter.DEFAULT_MAX_BLOCK_SIZE);
+  }
+
+  /**
+   * Creates {@code Lucene99PostingsFormat} with custom values for {@code minBlockSize} and {@code
+   * maxBlockSize} passed to block terms dictionary.
+   *
+   * @see
+   *     Lucene90BlockTreeTermsWriter#Lucene90BlockTreeTermsWriter(SegmentWriteState,PostingsWriterBase,int,int)
+   */
+  public Lucene99PostingsFormat(int minTermBlockSize, int maxTermBlockSize) {
     super("Lucene99");
+    Lucene90BlockTreeTermsWriter.validateSettings(minTermBlockSize, maxTermBlockSize);
+    this.minTermBlockSize = minTermBlockSize;
+    this.maxTermBlockSize = maxTermBlockSize;
   }
 
   @Override
@@ -384,7 +406,19 @@ public class Lucene99PostingsFormat extends PostingsFormat {
 
   @Override
   public FieldsConsumer fieldsConsumer(SegmentWriteState state) throws IOException {
-    throw new UnsupportedOperationException();
+    PostingsWriterBase postingsWriter = new Lucene99PostingsWriter(state);
+    boolean success = false;
+    try {
+      FieldsConsumer ret =
+          new Lucene90BlockTreeTermsWriter(
+              state, postingsWriter, minTermBlockSize, maxTermBlockSize);
+      success = true;
+      return ret;
+    } finally {
+      if (!success) {
+        IOUtils.closeWhileHandlingException(postingsWriter);
+      }
+    }
   }
 
   @Override
