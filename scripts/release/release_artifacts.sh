@@ -38,10 +38,12 @@ usage() {
   echo
   echo "Options:"
   echo "  --version   Maven version string in N.N.N-N format (e.g. 10.3.2-1)"
+  echo "  --project   (Optional) Evergreen project to target. Overrides branch-based detection."
   echo
   echo "Examples:"
   echo "  ${BASH_SOURCE[0]} --version 10.3.2-1"
   echo "  ${BASH_SOURCE[0]} --version 9.11.1-2"
+  echo "  ${BASH_SOURCE[0]} --version 10.3.2-1 --project lucene-mongot-10.3.2"
   echo
   echo "Requires the 'evergreen' CLI to be installed and configured."
   exit 1
@@ -67,10 +69,12 @@ log() {
 # --- Parse arguments ---
 
 version=""
+evergreen_project=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --version)  version="$2";      shift 2 ;;
+    --version)  version="$2";           shift 2 ;;
+    --project)  evergreen_project="$2"; shift 2 ;;
     --help|-h)  usage ;;
     *)
       log error "Unknown option: $1"
@@ -114,19 +118,23 @@ fi
 
 branch="$(git branch --show-current)"
 
-# Derive the Evergreen project from the branch name. Release branches must
-# target the per-version project (e.g. lucene-mongot-9.11.1) created by
-# setup_branch.sh — otherwise the diff between the release branch and main
-# is too large for Evergreen to accept.
-if [[ "$branch" == "main" ]]; then
-  project="lucene-mongot"
-elif [[ "$branch" =~ ^mongot_([0-9]+_[0-9]+_[0-9]+)$ ]]; then
-  lucene_version="${BASH_REMATCH[1]//_/.}"
-  project="lucene-mongot-${lucene_version}"
+if [ -n "$evergreen_project" ]; then
+  project="$evergreen_project"
 else
-  log error "Expected to be on 'main' or a mongot release branch (mongot_M_m_p), got: ${branch}"
-  log error "Create a release branch with: scripts/release/setup_branch.sh <version> <release-tag>"
-  exit 1
+  # Derive the Evergreen project from the branch name. Release branches must
+  # target the per-version project (e.g. lucene-mongot-9.11.1) created by
+  # setup_branch.sh — otherwise the diff between the release branch and main
+  # is too large for Evergreen to accept.
+  if [[ "$branch" == "main" ]]; then
+    project="lucene-mongot"
+  elif [[ "$branch" =~ ^mongot_([0-9]+_[0-9]+_[0-9]+)$ ]]; then
+    lucene_version="${BASH_REMATCH[1]//_/.}"
+    project="lucene-mongot-${lucene_version}"
+  else
+    log error "Expected to be on 'main' or a mongot release branch (mongot_M_m_p), got: ${branch}"
+    log error "Create a release branch with: scripts/release/setup_branch.sh <version> <release-tag>"
+    exit 1
+  fi
 fi
 
 # --- Summary ---
