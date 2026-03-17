@@ -114,6 +114,7 @@ fi
 
 branch="$(git branch --show-current)"
 
+<<<<<<< Updated upstream
 # Derive the Evergreen project from the branch name. Release branches must
 # target the per-version project (e.g. lucene-mongot-9.11.1) created by
 # setup_branch.sh — otherwise the diff between the release branch and main
@@ -127,6 +128,63 @@ else
   log error "Expected to be on 'main' or a mongot release branch (mongot_M_m_p), got: ${branch}"
   log error "Create a release branch with: scripts/release/setup_branch.sh <version> <release-tag>"
   exit 1
+=======
+# Resolve the tracking (upstream) branch. The Evergreen project is derived from
+# which remote branch this local branch tracks, not from the local branch name.
+# This lets you work on a feature branch (e.g. "my-fix") that tracks
+# origin/mongot_10_1_0 and still release from it.
+upstream="$(git rev-parse --abbrev-ref '@{upstream}' 2>/dev/null)" || true
+if [ -z "$upstream" ]; then
+  log error "No tracking branch set for '${branch}'."
+  log error "Set one with: git branch -u origin/<branch>"
+  exit 1
+fi
+
+# Strip the remote prefix (e.g. "origin/mongot_10_1_0" -> "mongot_10_1_0")
+remote_branch="${upstream#*/}"
+
+if [ -n "$evergreen_project" ]; then
+  project="$evergreen_project"
+else
+  # Derive the Evergreen project from the tracking branch. Release branches must
+  # target the per-version project (e.g. lucene-mongot-9.11.1) created by
+  # setup_branch.sh — otherwise the diff between the release branch and main
+  # is too large for Evergreen to accept.
+  if [[ "$remote_branch" == "main" ]]; then
+    project="lucene-mongot"
+  elif [[ "$remote_branch" =~ ^mongot_([0-9]+_[0-9]+_[0-9]+)$ ]]; then
+    lucene_version="${BASH_REMATCH[1]//_/.}"
+    project="lucene-mongot-${lucene_version}"
+  else
+    log error "Tracking branch must be 'main' or a release branch (mongot_M_m_p), got: ${upstream}"
+    log error "Create a release branch with: scripts/release/setup_branch.sh <version> <release-tag>"
+    exit 1
+  fi
+>>>>>>> Stashed changes
+fi
+
+# Ensure the local branch includes all commits from the remote. A patch that
+# is behind the remote would silently revert commits that others have pushed.
+log info "Fetching origin..."
+git fetch origin "$remote_branch"
+if ! git merge-base --is-ancestor "${upstream}" HEAD; then
+  log error "Local branch '${branch}' is behind ${upstream}."
+  echo
+  read -r -p "Merge ${upstream} into your local branch? [Y/n] " answer
+  case "${answer:-Y}" in
+    [Yy]*)
+      git merge "${upstream}" --no-edit
+      log ok "Merged ${upstream} into ${branch}."
+      ;;
+    *)
+      log error "Proceeding without merging may silently revert remote commits in the patch."
+      read -r -p "Continue anyway? [y/N] " confirm
+      case "${confirm:-N}" in
+        [Yy]*) log info "Continuing without merge." ;;
+        *)     log error "Aborting."; exit 1 ;;
+      esac
+      ;;
+  esac
 fi
 
 # --- Summary ---
