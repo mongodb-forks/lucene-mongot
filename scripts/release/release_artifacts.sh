@@ -114,21 +114,6 @@ fi
 
 branch="$(git branch --show-current)"
 
-<<<<<<< Updated upstream
-# Derive the Evergreen project from the branch name. Release branches must
-# target the per-version project (e.g. lucene-mongot-9.11.1) created by
-# setup_branch.sh — otherwise the diff between the release branch and main
-# is too large for Evergreen to accept.
-if [[ "$branch" == "main" ]]; then
-  project="lucene-mongot"
-elif [[ "$branch" =~ ^mongot_([0-9]+_[0-9]+_[0-9]+)$ ]]; then
-  lucene_version="${BASH_REMATCH[1]//_/.}"
-  project="lucene-mongot-${lucene_version}"
-else
-  log error "Expected to be on 'main' or a mongot release branch (mongot_M_m_p), got: ${branch}"
-  log error "Create a release branch with: scripts/release/setup_branch.sh <version> <release-tag>"
-  exit 1
-=======
 # Resolve the tracking (upstream) branch. The Evergreen project is derived from
 # which remote branch this local branch tracks, not from the local branch name.
 # This lets you work on a feature branch (e.g. "my-fix") that tracks
@@ -160,7 +145,7 @@ else
     log error "Create a release branch with: scripts/release/setup_branch.sh <version> <release-tag>"
     exit 1
   fi
->>>>>>> Stashed changes
+fi
 fi
 
 # Ensure the local branch includes all commits from the remote. A patch that
