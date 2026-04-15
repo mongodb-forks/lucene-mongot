@@ -47,7 +47,8 @@ final class PanamaVectorConstants {
     // double-widening conversions (byte->short->int), single accumulator (no unrolling),
     // and inability to emit native SDOT instructions. Disable it so HotSpot C2 can
     // auto-vectorize the scalar path more effectively.
-    boolean isAarch64with128bit = Constants.OS_ARCH.equals("aarch64") && VECTOR_BITSIZE <= 128;
+    boolean isAarch64with128bit =
+        Constants.OS_ARCH.equals("aarch64") && PREFERRED_VECTOR_BITSIZE <= 128;
     HAS_FAST_INTEGER_VECTORS =
         VectorizationProvider.TESTS_FORCE_INTEGER_VECTORS
             || (isAMD64withoutAVX2 == false && isAarch64with128bit == false);
