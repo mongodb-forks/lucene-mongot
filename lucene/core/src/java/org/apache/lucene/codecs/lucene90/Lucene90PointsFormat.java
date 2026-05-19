@@ -67,8 +67,10 @@ public final class Lucene90PointsFormat extends PointsFormat {
    * [Mongot] Held at {@link #VERSION_START} so segments written by {@code Lucene99Codec} remain
    * readable by Lucene 9.11.1 — a 9.11 reader rejects any newer header via {@link
    * org.apache.lucene.codecs.CodecUtil#checkIndexHeader}, which would block binary rollback during
-   * the 10.4 code upgrade. Restore to the latest revision when {@code Lucene99Codec} is no longer
-   * the writer.
+   * the 10.4 code upgrade. {@link Lucene90PointsReader} keeps its upper bound at {@link
+   * #VERSION_BKD_VECTORIZED_BPV24} explicitly so it can still read v1 segments from upstream
+   * backward-compat fixtures. Restore to the latest revision when {@code Lucene99Codec} is no
+   * longer the writer.
    */
   static final int VERSION_CURRENT = VERSION_START;
 
