@@ -95,7 +95,7 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
     try (ChecksumIndexInput meta = state.directory.openChecksumInput(metaFileName)) {
       Throwable priorE = null;
       try {
-        // [Mongot] Reader upper bound is the upstream latest (v1, VERSION_GROUPVARINT), not
+        // Reader upper bound is the upstream latest (v1, VERSION_GROUPVARINT), not
         // VERSION_CURRENT — the writer is pinned to v0 for 9.11.1 rollback, but we still need to
         // read v1 segments from upstream backward-compat fixtures (e.g.
         // TestInt7HnswBackwardsCompatibility

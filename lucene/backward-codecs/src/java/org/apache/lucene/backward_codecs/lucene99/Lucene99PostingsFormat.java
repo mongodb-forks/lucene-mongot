@@ -94,8 +94,8 @@ import org.apache.lucene.util.packed.PackedInts;
  *   <dd><b>Term Dictionary</b>
  *       <p>The .tim file contains the list of terms in each field along with per-term statistics
  *       (such as docfreq) and pointers to the frequencies, positions, payload and skip data in the
- *       .doc, .pos, and .pay files. See {@link Lucene90BlockTreeTermsWriter} for more details on
- *       the format.
+ *       .doc, .pos, and .pay files. See Lucene90BlockTreeTermsWriter for more details on the
+ *       format.
  *       <p>NOTE: The term dictionary can plug into different postings implementations: the postings
  *       writer/reader are actually responsible for encoding and decoding the PostingsHeader and
  *       TermMetadata sections described here:
@@ -149,7 +149,7 @@ import org.apache.lucene.util.packed.PackedInts;
  * <dl>
  *   <dd><b>Term Index</b>
  *       <p>The .tip file contains an index into the term dictionary, so that it can be accessed
- *       randomly. See {@link Lucene90BlockTreeTermsWriter} for more details on the format.
+ *       randomly. See Lucene90BlockTreeTermsWriter for more details on the format.
  * </dl>
  *
  * <a id="Frequencies"></a>

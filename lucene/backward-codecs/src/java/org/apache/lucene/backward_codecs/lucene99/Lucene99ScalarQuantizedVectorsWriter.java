@@ -105,11 +105,8 @@ public final class Lucene99ScalarQuantizedVectorsWriter extends FlatVectorsWrite
   private final int version;
   private boolean finished;
 
-  // [Mongot] Package-private (was public when this writer lived in upstream core). All callers are
-  // in `org.apache.lucene.backward_codecs.lucene99`, so tightening visibility costs nothing and
-  // avoids the missing-doclet check that now applies because the file moved from src/test to
-  // src/java for the 10.4 write-restoration.
-  Lucene99ScalarQuantizedVectorsWriter(
+  /** Public constructor. */
+  public Lucene99ScalarQuantizedVectorsWriter(
       SegmentWriteState state,
       Float confidenceInterval,
       FlatVectorsWriter rawVectorDelegate,
@@ -128,8 +125,8 @@ public final class Lucene99ScalarQuantizedVectorsWriter extends FlatVectorsWrite
     }
   }
 
-  // [Mongot] See note on the 4-arg constructor above — same package-private rationale.
-  Lucene99ScalarQuantizedVectorsWriter(
+  /** Public constructor */
+  public Lucene99ScalarQuantizedVectorsWriter(
       SegmentWriteState state,
       Float confidenceInterval,
       byte bits,

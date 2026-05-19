@@ -65,9 +65,9 @@ public class Lucene99HnswScalarQuantizedVectorsFormat extends KnnVectorsFormat {
   /** The format for storing, reading, merging vectors on disk */
   private final FlatVectorsFormat flatVectorsFormat;
 
-  // [Mongot] Restored from upstream 10.1.0 — needed by {@link #fieldsWriter} to thread
-  // multi-worker merge through to {@link Lucene99HnswVectorsWriter}. Removed when the class was
-  // moved to backward_codecs (read-only); reinstated for the Phase 3 write-side restoration.
+  // Restored from upstream 10.1.0 — needed by {@link #fieldsWriter} to thread multi-worker merge
+  // through to {@link Lucene99HnswVectorsWriter}. Removed when the class was moved to
+  // backward_codecs (read-only); reinstated for the Phase 3 write-side restoration.
   private final int numMergeWorkers;
   private final TaskExecutor mergeExec;
 
@@ -141,10 +141,10 @@ public class Lucene99HnswScalarQuantizedVectorsFormat extends KnnVectorsFormat {
   }
 
   @Override
-  // [Mongot] Writer restored while {@code Lucene99Codec} is still the writer (Phase 3 of the 10.x
-  // upgrade). On-disk version is unchanged from 9.11.1, so output is binary-compatible with a 9.11
-  // reader. Delegates to the core {@link Lucene99HnswVectorsWriter} for graph construction; the
-  // quantized payload comes from {@link #flatVectorsFormat}.
+  // Writer restored while {@code Lucene99Codec} is still the writer (Phase 3 of the 10.x upgrade).
+  // On-disk version is unchanged from 9.11.1, so output is binary-compatible with a 9.11 reader.
+  // Delegates to the core {@link Lucene99HnswVectorsWriter} for graph construction; the quantized
+  // payload comes from {@link #flatVectorsFormat}.
   public KnnVectorsWriter fieldsWriter(SegmentWriteState state) throws IOException {
     return new Lucene99HnswVectorsWriter(
         state,

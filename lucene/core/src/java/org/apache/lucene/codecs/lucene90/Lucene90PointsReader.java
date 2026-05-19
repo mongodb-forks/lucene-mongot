@@ -62,7 +62,7 @@ public class Lucene90PointsReader extends PointsReader {
       indexIn =
           readState.directory.openInput(
               indexFileName, readState.context.withHints(FileTypeHint.INDEX));
-      // [Mongot] Reader upper bound is the upstream latest (v1, VERSION_BKD_VECTORIZED_BPV24), not
+      // Reader upper bound is the upstream latest (v1, VERSION_BKD_VECTORIZED_BPV24), not
       // VERSION_CURRENT — the writer is pinned to v0 for 9.11.1 rollback, but we still need to
       // read v1 segments from upstream backward-compat fixtures
       // (`TestIndexSortBackwardsCompatibility and friends ship v1 .kdi/.kdd/.kdm payloads from
