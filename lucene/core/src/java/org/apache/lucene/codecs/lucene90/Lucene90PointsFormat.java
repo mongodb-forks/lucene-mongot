@@ -62,7 +62,15 @@ public final class Lucene90PointsFormat extends PointsFormat {
 
   static final int VERSION_START = 0;
   static final int VERSION_BKD_VECTORIZED_BPV24 = 1;
-  static final int VERSION_CURRENT = VERSION_BKD_VECTORIZED_BPV24;
+
+  /**
+   * [Mongot] Held at {@link #VERSION_START} so segments written by {@code Lucene99Codec} remain
+   * readable by Lucene 9.11.1 — a 9.11 reader rejects any newer header via
+   * {@link org.apache.lucene.codecs.CodecUtil#checkIndexHeader}, which would block binary rollback
+   * during the 10.4 code upgrade.
+   * Restore to the latest revision when {@code Lucene99Codec} is no longer the writer.
+   */
+  static final int VERSION_CURRENT = VERSION_START;
 
   private static final Map<Integer, Integer> VERSION_TO_BKD_VERSION =
       Map.of(
