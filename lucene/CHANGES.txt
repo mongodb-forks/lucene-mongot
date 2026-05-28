@@ -3,6 +3,15 @@ Lucene Change Log
 For more information on past and future Lucene versions, please see:
 http://s.apache.org/luceneversions
 
+======================= Lucene 10.1.0-3 =======================
+
+Bug Fixes
+---------------------
+* CLOUDP-408637: Restore WANDScorer dispatch for SHOULD-only BooleanQuery with
+  TOP_SCORES and minShouldMatch > 1. The Lucene 10.0 refactor in GITHUB#13408
+  unintentionally routed this shape to BooleanScorer, which lacks block-max
+  impact pruning and regressed top-K latency on dense matches. (Tianxiao Wei)
+
 ======================= Lucene 10.1.0 =======================
 
 API Changes
