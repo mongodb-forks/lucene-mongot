@@ -228,17 +228,18 @@ abstract class AbstractMultiTermQueryConstantScoreWrapper<Q extends MultiTermQue
       final long cost;
       final IOSupplier<WeightOrDocIdSetIterator> weightOrIteratorSupplier;
 
-      // Only collect terms while building the ScorerSupplier when the query exposes a known, bounded
-      // term count (e.g. TermInSetQuery, getTermsCount() >= 0). There, collecting is cheap and lets us
-      // return a null supplier up-front so a parent BooleanQuery can short-circuit.
+      // Only collect terms while building the ScorerSupplier when the query exposes a known,
+      // bounded term count (e.g. TermInSetQuery, getTermsCount() >= 0). There, collecting is
+      // cheap and lets us return a null supplier up-front so a parent BooleanQuery can
+      // short-circuit.
       //
-      // For queries with an unknown term count (e.g. automaton queries: wildcard / regexp / prefix /
-      // range), collecting eagerly can scan the whole term dictionary during ScorerSupplier
-      // construction -- a leading wildcard such as "*foo*" cannot seek and must visit every term. That
-      // is supposed to be the cheap "planning" phase, and doing it there defeats a parent
-      // conjunction's ability to short-circuit (a sibling clause matching no documents can no longer
-      // skip this clause before the scan runs). So for an unknown term count we estimate the cost and
-      // defer term collection to ScorerSupplier#get().
+      // For queries with an unknown term count (e.g. automaton queries: wildcard / regexp /
+      // prefix / range), collecting eagerly can scan the whole term dictionary during
+      // ScorerSupplier construction -- a leading wildcard such as "*foo*" cannot seek and must
+      // visit every term. That is supposed to be the cheap "planning" phase, and doing it there
+      // defeats a parent conjunction's ability to short-circuit (a sibling clause matching no
+      // documents can no longer skip this clause before the scan runs). So for an unknown term
+      // count we estimate the cost and defer term collection to ScorerSupplier#get().
       if (q.getTermsCount() >= 0) {
         List<TermAndState> collectedTerms = new ArrayList<>();
         boolean collectResult = collectTerms(fieldDocCount, termsEnum, collectedTerms);
@@ -248,6 +249,10 @@ abstract class AbstractMultiTermQueryConstantScoreWrapper<Q extends MultiTermQue
             return null;
           }
 
+          // TODO: Instead of replicating the cost logic of a BooleanQuery we could consider
+          // rewriting to a BQ eagerly at this point and delegating to its cost method (instead of
+          // lazily rewriting on #get). Not sure what the performance hit would be of doing this
+          // though.
           long sumTermCost = 0;
           for (TermAndState collectedTerm : collectedTerms) {
             sumTermCost += collectedTerm.docFreq;

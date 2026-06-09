@@ -454,7 +454,8 @@ public class TestWildcardQuery extends LuceneTestCase {
     Weight weight = rewritten.createWeight(searcher, ScoreMode.COMPLETE_NO_SCORES, 1.0f);
     ScorerSupplier supplier = weight.scorerSupplier(lrc);
     // Automaton queries have an unknown term count, so term collection is deferred to get() and the
-    // cost is the worst-case estimate (sum of doc freqs across all terms) rather than the sum over the
+    // cost is the worst-case estimate (sum of doc freqs across all terms) rather than the sum over
+    // the
     // matching terms only.
     assertEquals(3000, supplier.cost());
 
@@ -467,12 +468,12 @@ public class TestWildcardQuery extends LuceneTestCase {
     reader.close();
     dir.close();
   }
-  
-  // A leading wildcard is an automaton MultiTermQuery with an unknown term count (getTermsCount() ==
-  // -1). Building its ScorerSupplier must not scan the term dictionary -- that is the cheap "planning"
-  // phase, and a leading wildcard such as "*foo*" cannot seek, so collecting terms there would walk
-  // the whole dictionary. The scan must be deferred to ScorerSupplier#get(), so a parent conjunction
-  // can short-circuit (a sibling clause matching no documents) before it runs.
+
+  // A leading wildcard is an automaton MultiTermQuery with an unknown term count (getTermsCount()
+  // == -1). Building its ScorerSupplier must not scan the term dictionary -- that is the cheap
+  // "planning" phase, and a leading wildcard such as "*foo*" cannot seek, so collecting terms there
+  // would walk the whole dictionary. The scan must be deferred to ScorerSupplier#get(), so a parent
+  // conjunction can short-circuit (a sibling clause matching no documents) before it runs.
   public void testScorerSupplierDoesNotScanTermsEagerly() throws IOException {
     Directory dir = newDirectory();
     RandomIndexWriter writer = new RandomIndexWriter(random(), dir);
@@ -506,8 +507,7 @@ public class TestWildcardQuery extends LuceneTestCase {
 
     // The scan is deferred to get(): building the scorer is where the terms are actually walked.
     assertNotNull(supplier.get(Long.MAX_VALUE));
-    assertTrue(
-        "get() should scan the term dictionary", termsEnumNextCalls.get() > 0);
+    assertTrue("get() should scan the term dictionary", termsEnumNextCalls.get() > 0);
 
     reader.close();
     dir.close();
@@ -523,7 +523,9 @@ public class TestWildcardQuery extends LuceneTestCase {
     };
   }
 
-  /** Wraps a reader so every {@link TermsEnum#next()} (via iterator() or intersect()) is counted. */
+  /**
+   * Wraps a reader so every {@link TermsEnum#next()} (via iterator() or intersect()) is counted.
+   */
   private static class NextCountingReaderWrapper extends FilterDirectoryReader {
     private final AtomicInteger counter;
 
