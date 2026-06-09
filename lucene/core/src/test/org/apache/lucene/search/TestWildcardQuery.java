@@ -455,8 +455,7 @@ public class TestWildcardQuery extends LuceneTestCase {
     ScorerSupplier supplier = weight.scorerSupplier(lrc);
     // Automaton queries have an unknown term count, so term collection is deferred to get() and the
     // cost is the worst-case estimate (sum of doc freqs across all terms) rather than the sum over
-    // the
-    // matching terms only.
+    // the matching terms only.
     assertEquals(3000, supplier.cost());
 
     query = new WildcardQuery(new Term("body", "bar*"));

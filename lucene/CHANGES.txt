@@ -3,6 +3,17 @@ Lucene Change Log
 For more information on past and future Lucene versions, please see:
 http://s.apache.org/luceneversions
 
+======================= Lucene 10.1.0-4 =======================
+
+Bug Fixes
+---------------------
+* GITHUB#16222: MultiTermQuery constant-score wrapper now defers term collection to ScorerSupplier#get()
+  for queries with an unknown term count (automaton queries such as wildcard/regexp/prefix/range),
+  instead of scanning the term dictionary while building the ScorerSupplier. This keeps the
+  ScorerSupplier "planning" phase cheap so a parent conjunction can short-circuit (e.g. a sibling
+  clause matching no documents) before a non-seekable scan, such as a leading wildcard, runs.
+  (Tianxiao Wei)
+
 ======================= Lucene 10.1.0-3 =======================
 
 Bug Fixes
