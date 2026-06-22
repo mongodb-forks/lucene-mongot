@@ -234,7 +234,11 @@ class Lucene99MemorySegmentScalarQuantizedVectorScorer implements FlatVectorsSco
 
     @Override
     int dotProduct(MemorySegment doc) {
-      return PanamaVectorUtilSupport.uint8DotProduct(targetBytes, doc);
+      // 7-bit: signed kernel intrinsifies on aarch64 (B2S/S2I), unsigned kernel falls into
+      // Java software fallback. Result is identical for 7-bit values.
+      return getQuantizer().getBits() == 7
+          ? PanamaVectorUtilSupport.dotProduct(targetBytes, doc)
+          : PanamaVectorUtilSupport.uint8DotProduct(targetBytes, doc);
     }
 
     @Override
@@ -307,7 +311,11 @@ class Lucene99MemorySegmentScalarQuantizedVectorScorer implements FlatVectorsSco
 
     @Override
     int dotProduct(MemorySegment doc) {
-      return PanamaVectorUtilSupport.uint8DotProduct(query, doc);
+      // 7-bit: signed kernel intrinsifies on aarch64 (B2S/S2I), unsigned kernel falls into
+      // Java software fallback. Result is identical for 7-bit values.
+      return getQuantizer().getBits() == 7
+          ? PanamaVectorUtilSupport.dotProduct(targetBytes, doc)
+          : PanamaVectorUtilSupport.uint8DotProduct(targetBytes, doc);
     }
 
     @Override

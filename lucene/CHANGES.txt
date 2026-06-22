@@ -28,6 +28,8 @@ Optimizations
   clause matching no documents) before a non-seekable scan, such as a leading wildcard, runs.
   (Tianxiao Wei)
 
+* GITHUB#21:
+
 ======================= Lucene 10.4.0 =======================
 
 API Changes
