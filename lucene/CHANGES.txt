@@ -28,7 +28,11 @@ Optimizations
   clause matching no documents) before a non-seekable scan, such as a leading wildcard, runs.
   (Tianxiao Wei)
 
-* GITHUB#21:
+* GITHUB#21: Use signed dotProduct kernel instead of uint8DotProduct for 7-bit scalar
+  quantization in Lucene99ScalarQuantizedVectorScorer and
+  Lucene99MemorySegmentScalarQuantizedVectorScorer. For 7-bit values the kernels are
+  numerically equivalent, but the signed variant intrinsifies on aarch64 NEON while the
+  unsigned variant falls into a Java software fallback. (Tianxiao Wei)
 
 ======================= Lucene 10.4.0 =======================
 
