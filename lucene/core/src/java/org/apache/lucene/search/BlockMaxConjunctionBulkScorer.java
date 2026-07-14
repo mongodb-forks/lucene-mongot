@@ -44,6 +44,7 @@ final class BlockMaxConjunctionBulkScorer extends BulkScorer {
   private final SimpleScorable scorable = new SimpleScorable();
   private final double[] sumOfOtherClauses;
   private final int maxDoc;
+  private final boolean scoreWindowDocAtATime;
   private final DocAndFloatFeatureBuffer docAndScoreBuffer = new DocAndFloatFeatureBuffer();
   private final DocAndScoreAccBuffer docAndScoreAccBuffer = new DocAndScoreAccBuffer();
 
@@ -64,6 +65,25 @@ final class BlockMaxConjunctionBulkScorer extends BulkScorer {
     this.sumOfOtherClauses = new double[this.scorers.length];
     Arrays.fill(sumOfOtherClauses, Double.POSITIVE_INFINITY);
     this.maxDoc = maxDoc;
+    // The score-first window path (#14701) only pays off when the lead clause can produce docs and
+    // scores in bulk (vectorized scoring + dynamic-pruning skips). When the lead has no specialized
+    // Scorer#nextDocsAndScores (e.g. a block-join scorer, which uses the default per-doc loop),
+    // buffering the whole window before applying the required clauses is pure overhead over a lean
+    // doc-at-a-time loop, and regresses scored block-join conjunctions such as mongot's hasRoot /
+    // hasAncestor over a dense embedded-path childFilter (CLOUDP-406320). Fall back to the 10.1
+    // doc-at-a-time window in that case. The gate is on scorers[0] because that is the clause the
+    // window path drains via nextDocsAndScores.
+    this.scoreWindowDocAtATime = !hasSpecializedBulkScorer(this.scorers[0]);
+  }
+
+  /**
+   * Whether the given lead scorer overrides {@link Scorer#nextDocsAndScores} with a real bulk
+   * producer that the score-first window path can exploit. Kept as an explicit allowlist (mirroring
+   * {@link ScorerUtil#likelyTermScorer}); block-join, disjunction and most other scorers use the
+   * default per-doc {@code nextDocsAndScores} and are better served by the doc-at-a-time window.
+   */
+  private static boolean hasSpecializedBulkScorer(Scorer scorer) {
+    return scorer instanceof TermScorer || scorer instanceof ConstantScoreScorer;
   }
 
   private float computeMaxScore(int windowMin, int windowMax) throws IOException {
@@ -101,7 +121,11 @@ final class BlockMaxConjunctionBulkScorer extends BulkScorer {
       windowMax = MathUtil.unsignedMin(windowMax, windowMin + MAX_WINDOW_SIZE);
 
       float maxWindowScore = computeMaxScore(windowMin, windowMax);
-      scoreWindowScoreFirst(collector, acceptDocs, windowMin, windowMax + 1, maxWindowScore);
+      if (scoreWindowDocAtATime) {
+        scoreWindowDocAtATime(collector, acceptDocs, windowMin, windowMax + 1, maxWindowScore);
+      } else {
+        scoreWindowScoreFirst(collector, acceptDocs, windowMin, windowMax + 1, maxWindowScore);
+      }
       windowMin = Math.max(lead.docID(), windowMax + 1);
     }
 
@@ -202,6 +226,105 @@ final class BlockMaxConjunctionBulkScorer extends BulkScorer {
     }
     if (lead.docID() < maxOtherDoc) {
       lead.advance(maxOtherDoc);
+    }
+  }
+
+  /**
+   * Score a window of doc IDs one document at a time on the lead clause, computing the score as more
+   * clauses match so we can skip advancing (and scoring) further clauses once the partial score
+   * cannot be competitive. This is Lucene 10.1's {@code scoreWindow}; it avoids the score-first path
+   * of buffering and scoring the whole lead window up front, which is pure overhead when the lead
+   * clause has no specialized {@link Scorer#nextDocsAndScores} (see {@link #hasSpecializedBulkScorer}
+   * and CLOUDP-406320). Matches and scores are identical to {@link #scoreWindowScoreFirst}.
+   *
+   * <p>Unlike the score-first path there is no per-window buffer, so the {@code MAX_WINDOW_SIZE}
+   * clamp is intentionally not needed here.
+   */
+  private void scoreWindowDocAtATime(
+      LeafCollector collector, Bits acceptDocs, int min, int max, float maxWindowScore)
+      throws IOException {
+    if (maxWindowScore < scorable.minCompetitiveScore) {
+      // no hits are competitive
+      return;
+    }
+
+    if (lead.docID() < min) {
+      lead.advance(min);
+    }
+
+    double sumOfOtherMaxScoresAt1 = sumOfOtherClauses[1];
+
+    advanceHead:
+    for (int doc = lead.docID(); doc < max; ) {
+      if (acceptDocs != null && acceptDocs.get(doc) == false) {
+        doc = lead.nextDoc();
+        continue;
+      }
+
+      // Compute the score as more clauses match, so we can skip advancing other clauses when the
+      // total score cannot be competitive (computing a score is usually cheaper than decoding a
+      // full block of postings).
+      boolean hasMinCompetitiveScore = scorable.minCompetitiveScore > 0;
+      double currentScore;
+      if (hasMinCompetitiveScore) {
+        currentScore = scorables[0].score();
+      } else {
+        currentScore = 0;
+      }
+
+      // Specialized for the 2nd least costly clause; mirrors the loop below. Helps the JVM.
+      if (hasMinCompetitiveScore
+          && (float) MathUtil.sumUpperBound(currentScore + sumOfOtherMaxScoresAt1, scorers.length)
+              < scorable.minCompetitiveScore) {
+        doc = lead.nextDoc();
+        continue advanceHead;
+      }
+
+      if (iterators[1].docID() < doc) {
+        int next = iterators[1].advance(doc);
+        if (next != doc) {
+          doc = lead.advance(next);
+          continue advanceHead;
+        }
+      }
+      if (hasMinCompetitiveScore) {
+        currentScore += scorables[1].score();
+      }
+
+      for (int i = 2; i < iterators.length; ++i) {
+        if (hasMinCompetitiveScore
+            && (float) MathUtil.sumUpperBound(currentScore + sumOfOtherClauses[i], scorers.length)
+                < scorable.minCompetitiveScore) {
+          doc = lead.nextDoc();
+          continue advanceHead;
+        }
+
+        if (iterators[i].docID() < doc) {
+          int next = iterators[i].advance(doc);
+          if (next != doc) {
+            doc = lead.advance(next);
+            continue advanceHead;
+          }
+        }
+        if (hasMinCompetitiveScore) {
+          currentScore += scorables[i].score();
+        }
+      }
+
+      if (hasMinCompetitiveScore == false) {
+        for (Scorable clauseScorable : scorables) {
+          currentScore += clauseScorable.score();
+        }
+      }
+      scorable.score = (float) currentScore;
+      collector.collect(doc);
+      // collect() may have raised the minimum competitive score.
+      if (maxWindowScore < scorable.minCompetitiveScore) {
+        // no more hits are competitive
+        return;
+      }
+
+      doc = lead.nextDoc();
     }
   }
 
