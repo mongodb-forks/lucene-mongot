@@ -218,11 +218,12 @@ final class BlockMaxConjunctionBulkScorer extends BulkScorer {
 
   /**
    * Score a window of doc IDs one document at a time, computing the score as more clauses match so
-   * that we can skip advancing (and scoring) further clauses once the partial score can no longer be
-   * competitive. This is the counterpart to {@link #scoreWindowScoreFirst} used when the lead clause
-   * has no specialized {@link Scorer#nextDocsAndScores} (see {@link #hasSpecializedBulkScorer}),
-   * where buffering and scoring the whole window up front would be pure overhead. Matches and scores
-   * are identical to {@link #scoreWindowScoreFirst}.
+   * that we can skip advancing (and scoring) further clauses once the partial score can no longer
+   * be competitive. This is the counterpart to {@link #scoreWindowScoreFirst} used when the lead
+   * clause opts in via {@link Scorer#preferDocAtATimeWindowScoring()}, typically because it has no
+   * specialized {@link Scorer#nextDocsAndScores} and an expensive per-document score, so buffering
+   * and scoring the whole window up front would be pure overhead. Matches and scores are identical
+   * to {@link #scoreWindowScoreFirst}.
    */
   private void scoreWindowDocAtATime(
       LeafCollector collector, Bits acceptDocs, int min, int max, float maxWindowScore)
