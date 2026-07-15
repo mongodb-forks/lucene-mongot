@@ -130,4 +130,22 @@ public abstract class Scorer extends Scorable {
     }
     buffer.size = size;
   }
+
+  /**
+   * Returns {@code true} if a top-level conjunction that uses this scorer as its lead (least-costly)
+   * clause should be evaluated document-at-a-time rather than via the score-first, term-at-a-time
+   * window path used by {@code BlockMaxConjunctionBulkScorer}.
+   *
+   * <p>The score-first path buffers and scores a whole window of lead documents before applying the
+   * other clauses. That pays off when this scorer can emit documents and scores in bulk (see {@link
+   * #nextDocsAndScores}) and exposes block-max impacts for pruning. Scorers whose per-document score
+   * is expensive to compute and that expose no useful impacts (for example block-join scorers) are
+   * faster evaluated document-at-a-time and should override this to return {@code true}. Defaults to
+   * {@code false}, preserving the score-first path.
+   *
+   * @lucene.internal
+   */
+  public boolean preferDocAtATimeWindowScoring() {
+    return false;
+  }
 }

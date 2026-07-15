@@ -65,23 +65,12 @@ final class BlockMaxConjunctionBulkScorer extends BulkScorer {
     this.sumOfOtherClauses = new double[this.scorers.length];
     Arrays.fill(sumOfOtherClauses, Double.POSITIVE_INFINITY);
     this.maxDoc = maxDoc;
-    // The score-first window path only helps when the lead clause exposes a specialized
-    // Scorer#nextDocsAndScores (bulk/vectorized scoring plus dynamic-pruning skips). When the lead
-    // clause falls back to the default doc-at-a-time nextDocsAndScores (e.g. a block-join scorer),
-    // buffering and scoring the whole window before applying the other clauses is pure overhead, so
-    // score the window one document at a time instead. The gate is on scorers[0] because that is
-    // the clause the score-first path drains via nextDocsAndScores.
-    this.scoreWindowDocAtATime = !hasSpecializedBulkScorer(this.scorers[0]);
-  }
-
-  /**
-   * Whether the given lead scorer overrides {@link Scorer#nextDocsAndScores} with a real bulk
-   * producer that the score-first window path can exploit. Kept as an explicit allowlist (mirroring
-   * {@link ScorerUtil#likelyTermScorer}); block-join, disjunction and most other scorers use the
-   * default per-doc {@code nextDocsAndScores} and are better served by the doc-at-a-time window.
-   */
-  private static boolean hasSpecializedBulkScorer(Scorer scorer) {
-    return scorer instanceof TermScorer || scorer instanceof ConstantScoreScorer;
+    // Most lead clauses are fastest with the score-first window path, but some (e.g. block-join
+    // scorers) have an expensive per-document score and no useful impacts, so buffering and scoring
+    // a whole window before applying the other clauses is pure overhead; those opt into a
+    // doc-at-a-time window via Scorer#preferDocAtATimeWindowScoring. The gate is on scorers[0]
+    // because that is the clause the score-first path drains via nextDocsAndScores.
+    this.scoreWindowDocAtATime = this.scorers[0].preferDocAtATimeWindowScoring();
   }
 
   private float computeMaxScore(int windowMin, int windowMax) throws IOException {

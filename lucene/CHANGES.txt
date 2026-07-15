@@ -34,12 +34,12 @@ Optimizations
   numerically equivalent, but the signed variant intrinsifies on aarch64 NEON while the
   unsigned variant falls into a Java software fallback. (Tianxiao Wei)
 
-* GITHUB#23: BlockMaxConjunctionBulkScorer scores a window one document at a time when the lead
-  clause has no specialized Scorer#nextDocsAndScores (e.g. a block-join scorer). The score-first
-  window path (GITHUB#14701) buffers and scores the whole lead window before applying the other
-  clauses, which is pure overhead when the lead cannot produce docs and scores in bulk and can
-  roughly double latency for scored block-join conjunctions over a dense constant-score clause.
-  Matches and scores are unchanged. (Tianxiao Wei)
+* GITHUB#23: Add Scorer#preferDocAtATimeWindowScoring() (default false) so a lead clause can opt a
+  top-level conjunction out of the score-first window path (GITHUB#14701) and back to doc-at-a-time
+  window scoring in BlockMaxConjunctionBulkScorer. Block-join scorers (ToChildBlockJoinQuery /
+  ToParentBlockJoinQuery) opt in: their per-document score is expensive and they expose no useful
+  impacts, so buffering and scoring the whole lead window up front is pure overhead and can roughly
+  double latency for scored block-join conjunctions. Matches and scores are unchanged. (Tianxiao Wei)
 
 ======================= Lucene 10.4.0 =======================
 
