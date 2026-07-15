@@ -230,12 +230,13 @@ final class BlockMaxConjunctionBulkScorer extends BulkScorer {
   }
 
   /**
-   * Score a window of doc IDs one document at a time on the lead clause, computing the score as more
-   * clauses match so we can skip advancing (and scoring) further clauses once the partial score
-   * cannot be competitive. This is Lucene 10.1's {@code scoreWindow}; it avoids the score-first path
-   * of buffering and scoring the whole lead window up front, which is pure overhead when the lead
-   * clause has no specialized {@link Scorer#nextDocsAndScores} (see {@link #hasSpecializedBulkScorer}
-   * and CLOUDP-406320). Matches and scores are identical to {@link #scoreWindowScoreFirst}.
+   * Score a window of doc IDs one document at a time on the lead clause, computing the score as
+   * more clauses match so we can skip advancing (and scoring) further clauses once the partial
+   * score cannot be competitive. This is Lucene 10.1's {@code scoreWindow}; it avoids the
+   * score-first path of buffering and scoring the whole lead window up front, which is pure
+   * overhead when the lead clause has no specialized {@link Scorer#nextDocsAndScores} (see {@link
+   * #hasSpecializedBulkScorer} and CLOUDP-406320). Matches and scores are identical to {@link
+   * #scoreWindowScoreFirst}.
    *
    * <p>Unlike the score-first path there is no per-window buffer, so the {@code MAX_WINDOW_SIZE}
    * clamp is intentionally not needed here.
