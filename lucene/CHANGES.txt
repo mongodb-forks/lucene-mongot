@@ -3,6 +3,17 @@ Lucene Change Log
 For more information on past and future Lucene versions, please see:
 http://s.apache.org/luceneversions
 
+======================= Lucene 10.1.0-5 =======================
+
+Bug Fixes
+---------------------
+* GITHUB#15380: Fix potential EOF introduced by optimized filter iterations in MaxScoreBulkScorer. The
+  approximation and the match verification could get out of sync, resulting in an EOFException. (Ben Trent)
+
+* GITHUB#14186: Filtered disjunctions may miss some top hits. MaxScoreBulkScorer's initial filter
+  advance moved only the top essential clause without restoring the priority-queue invariant.
+  (Adrien Grand)
+
 ======================= Lucene 10.1.0-4 =======================
 
 Bug Fixes
