@@ -299,4 +299,9 @@ public class AssertingScorer extends Scorer {
       }
     }
   }
+
+  @Override
+  public boolean preferDocAtATimeWindowScoring() {
+    return in.preferDocAtATimeWindowScoring();
+  }
 }

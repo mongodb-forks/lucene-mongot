@@ -375,6 +375,14 @@ public class ToParentBlockJoinQuery extends Query {
     }
 
     @Override
+    public boolean preferDocAtATimeWindowScoring() {
+      // Block-join scoring is expensive per document and exposes no useful impacts, so a
+      // conjunction led by this scorer is faster evaluated document-at-a-time than via the
+      // score-first window.
+      return true;
+    }
+
+    @Override
     public Collection<ChildScorable> getChildren() {
       return Collections.singleton(new ChildScorable(childScorer, "BLOCK_JOIN"));
     }
