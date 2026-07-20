@@ -21,6 +21,13 @@ Bug Fixes
 
 Optimizations
 ---------------------
+* GITHUB#22: ConstantScoreScorer#nextDocsAndScores now drains disjunction-backed iterators in bulk
+  via DocIdSetIterator#intoBitSet instead of one nextDoc() call per match, and the TOP_SCORES
+  iterator wrapper forwards intoBitSet/docIDRunEnd to its delegate. This avoids a priority-queue
+  update per matching doc per clause under MaxScoreBulkScorer's term-at-a-time scoring
+  (GITHUB#14701), which regressed top-k disjunctions of dense constant-score term-set clauses.
+  Iterators that are cheap to advance one doc at a time keep the doc-at-a-time loop. (Chengxi Shi)
+
 * GITHUB#16222: MultiTermQuery constant-score wrapper now defers term collection to ScorerSupplier#get()
   for queries with an unknown term count (automaton queries such as wildcard/regexp/prefix/range),
   instead of scanning the term dictionary while building the ScorerSupplier. This keeps the
