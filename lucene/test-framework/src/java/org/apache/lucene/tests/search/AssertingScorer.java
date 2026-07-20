@@ -306,4 +306,9 @@ public class AssertingScorer extends Scorer {
             + ". Implementations that filter the buffer, e.g. on liveDocs, must keep loading"
             + " batches until one is non-empty.";
   }
+
+  @Override
+  public boolean preferDocAtATimeWindowScoring() {
+    return in.preferDocAtATimeWindowScoring();
+  }
 }
