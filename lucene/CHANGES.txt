@@ -21,6 +21,10 @@ Bug Fixes
 
 Optimizations
 ---------------------
+* GITHUB#30: Lucene99HnswVectorReader only performs exhaustive scan when unfilteredVisited >=
+  filtededDocCount for filtered search, not for unfiltered search. This restores the 10.1 behavior.
+  (Tianxiao Wei)
+  
 * GITHUB#22: ConstantScoreScorer#nextDocsAndScores now drains disjunction-backed iterators in bulk
   via DocIdSetIterator#intoBitSet instead of one nextDoc() call per match, and the TOP_SCORES
   iterator wrapper forwards intoBitSet/docIDRunEnd to its delegate. This avoids a priority-queue

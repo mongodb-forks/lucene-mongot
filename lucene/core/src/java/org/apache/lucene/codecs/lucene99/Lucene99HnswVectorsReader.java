@@ -355,7 +355,8 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
     boolean doHnsw = knnCollector.k() < numVectors;
     // The approximate number of vectors that would be visited if we did not filter
     int unfilteredVisit = HnswGraphSearcher.expectedVisitedNodes(knnCollector.k(), graphSize);
-    if (unfilteredVisit >= filteredDocCount || graphSize == 0) {
+    // Restore the 10.2 gating;: only perform exhaustive scan for filtered search.
+    if ((unfilteredVisit >= filteredDocCount && filteredDocCount < graphSize) || graphSize == 0) {
       doHnsw = false;
     }
     if (doHnsw) {
