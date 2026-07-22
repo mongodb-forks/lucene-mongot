@@ -14,7 +14,7 @@ API Changes
   
 Bug Fixes
 ---------------------
-* GITHUB$26: Restore HnswGraphSearcher's behavior to be consistent with 10.1. incVisitedCount(1)
+* GITHUB#26: Restore HnswGraphSearcher's behavior to be consistent with 10.1. incVisitedCount(1)
   is interleaved with collect() so that MultiLeafKnnCollector's (visited & interval) == 0 sync
   trigger fires as in 10.1. (Tianxiao Wei)
 
