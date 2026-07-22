@@ -209,19 +209,12 @@ abstract class AbstractKnnVectorQuery extends Query {
     final int cost = acceptDocs.cost();
     QueryTimeout queryTimeout = timeLimitingKnnCollectorManager.getQueryTimeout();
 
-    final int perLeafTopK;
-    // ctx.parent could be null if this is a MemoryIndex
-    if (ctx.parent != null) {
-      float leafProportion = ctx.reader().maxDoc() / (float) ctx.parent.reader().maxDoc();
-      perLeafTopK = perLeafTopKCalculation(k, leafProportion);
-      // We don't have a good way to estimate perLeafTopK here, so just do approximate search
-    } else {
-      perLeafTopK = k;
-    }
+    // perLeafTopK related calculation and heuristics are removed because we've reverted back to
+    // MultiLeafKnnCollector
 
-    if (cost <= perLeafTopK) {
-      // If there are <= perLeafTopK possible matches, short-circuit and perform exact search, since
-      // HNSW must always visit at least perLeafTopK documents
+    if (cost <= k) {
+      // If there are <= k possible matches, short-circuit and perform exact search, since
+      // HNSW must always visit at least k documents
       return exactSearch(ctx, acceptDocs.iterator(), queryTimeout);
     }
 
@@ -229,10 +222,7 @@ abstract class AbstractKnnVectorQuery extends Query {
     // We pass cost + 1 here to account for the edge case when we explore exactly cost vectors
     TopDocs results = approximateSearch(ctx, acceptDocs, cost + 1, timeLimitingKnnCollectorManager);
 
-    if ((results.totalHits.relation() == TotalHits.Relation.EQUAL_TO
-            // We know that there are more than `perLeafTopK` available docs, if we didn't even get
-            // `perLeafTopK` something weird happened, and we need to drop to exact search
-            && results.scoreDocs.length >= perLeafTopK)
+    if ((results.totalHits.relation() == TotalHits.Relation.EQUAL_TO)
         // Return partial results only when timeout is met
         || (queryTimeout != null && queryTimeout.shouldExit())) {
       return results;
