@@ -25,7 +25,8 @@ Optimizations
   TopKnnCollectorManager again shares a global score queue across leaves (MultiLeafKnnCollector)
   instead of opting into the two-phase "optimistic" search, whose second executor wave reduced
   concurrent query parallelism. The perLeafTopK-based exact-search fallback in
-  AbstractKnnVectorQuery is removed accordingly. (Tianxiao Wei)
+  AbstractKnnVectorQuery is removed accordingly. Also changed Lucene99HnswVectorReader to only
+  perform exhaustive scan when unfilteredVisit >= filteredDocCount for filtered search (Tianxiao Wei)
 
 * GITHUB#22: ConstantScoreScorer#nextDocsAndScores now drains disjunction-backed iterators in bulk
   via DocIdSetIterator#intoBitSet instead of one nextDoc() call per match, and the TOP_SCORES
