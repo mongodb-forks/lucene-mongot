@@ -14,10 +14,14 @@ API Changes
   
 Bug Fixes
 ---------------------
+* GITHUB#26: Restore HnswGraphSearcher's behavior to be consistent with 10.1. incVisitedCount(1)
+  is interleaved with collect() so that MultiLeafKnnCollector's (visited & interval) == 0 sync
+  trigger fires as in 10.1. (Tianxiao Wei)
+
 * GITHUB#16400: Restore HNSW graph reuse during merges under per-field vectors formats,
   including the default codec. Since 10.4.0 the merger tested the per-field wrapper instead
   of the unwrapped reader, so every merge rebuilt the graph from scratch. (Jeho Jeong)
- 
+
 * GITHUB#16176: Restore WANDScorer dispatch for SHOULD-only BooleanQuery with
   TOP_SCORES and minShouldMatch > 1. The Lucene 10.0 refactor in GITHUB#13408
   unintentionally routed this shape to BooleanScorer, which lacks block-max
@@ -61,7 +65,7 @@ Optimizations
   ToParentBlockJoinQuery) opt in: their per-document score is expensive and they expose no useful
   impacts, so buffering and scoring the whole lead window up front is pure overhead and can roughly
   double latency for scored block-join conjunctions. Matches and scores are unchanged. (Tianxiao Wei)
-
+ 
 ======================= Lucene 10.4.0 =======================
 
 API Changes
