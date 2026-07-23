@@ -14,6 +14,10 @@ API Changes
   
 Bug Fixes
 ---------------------
+* GITHUB#16400: Restore HNSW graph reuse during merges under per-field vectors formats,
+  including the default codec. Since 10.4.0 the merger tested the per-field wrapper instead
+  of the unwrapped reader, so every merge rebuilt the graph from scratch. (Jeho Jeong)
+ 
 * GITHUB#16176: Restore WANDScorer dispatch for SHOULD-only BooleanQuery with
   TOP_SCORES and minShouldMatch > 1. The Lucene 10.0 refactor in GITHUB#13408
   unintentionally routed this shape to BooleanScorer, which lacks block-max
