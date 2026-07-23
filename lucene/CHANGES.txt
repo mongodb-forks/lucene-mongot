@@ -21,10 +21,16 @@ Bug Fixes
 
 Optimizations
 ---------------------
+* GITHUB#29: Revert the default kNN search to the pre-10.3 single-wave multi-leaf collection:
+  TopKnnCollectorManager again shares a global score queue across leaves (MultiLeafKnnCollector)
+  instead of opting into the two-phase "optimistic" search, whose second executor wave reduced
+  concurrent query parallelism. The perLeafTopK-based exact-search fallback in
+  AbstractKnnVectorQuery is removed accordingly. (Tianxiao Wei)
+
 * GITHUB#30: Lucene99HnswVectorReader only performs exhaustive scan when unfilteredVisited >=
   filtededDocCount for filtered search, not for unfiltered search. This restores the 10.1 behavior.
   (Tianxiao Wei)
-  
+
 * GITHUB#22: ConstantScoreScorer#nextDocsAndScores now drains disjunction-backed iterators in bulk
   via DocIdSetIterator#intoBitSet instead of one nextDoc() call per match, and the TOP_SCORES
   iterator wrapper forwards intoBitSet/docIDRunEnd to its delegate. This avoids a priority-queue
