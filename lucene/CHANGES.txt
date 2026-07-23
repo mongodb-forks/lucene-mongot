@@ -18,6 +18,10 @@ Bug Fixes
   is interleaved with collect() so that MultiLeafKnnCollector's (visited & interval) == 0 sync
   trigger fires as in 10.1. (Tianxiao Wei)
 
+* GITHUB#16400: Restore HNSW graph reuse during merges under per-field vectors formats,
+  including the default codec. Since 10.4.0 the merger tested the per-field wrapper instead
+  of the unwrapped reader, so every merge rebuilt the graph from scratch. (Jeho Jeong)
+
 * GITHUB#16176: Restore WANDScorer dispatch for SHOULD-only BooleanQuery with
   TOP_SCORES and minShouldMatch > 1. The Lucene 10.0 refactor in GITHUB#13408
   unintentionally routed this shape to BooleanScorer, which lacks block-max
@@ -25,6 +29,16 @@ Bug Fixes
 
 Optimizations
 ---------------------
+* GITHUB#29: Revert the default kNN search to the pre-10.3 single-wave multi-leaf collection:
+  TopKnnCollectorManager again shares a global score queue across leaves (MultiLeafKnnCollector)
+  instead of opting into the two-phase "optimistic" search, whose second executor wave reduced
+  concurrent query parallelism. The perLeafTopK-based exact-search fallback in
+  AbstractKnnVectorQuery is removed accordingly. (Tianxiao Wei)
+
+* GITHUB#30: Lucene99HnswVectorReader only performs exhaustive scan when unfilteredVisited >=
+  filtededDocCount for filtered search, not for unfiltered search. This restores the 10.1 behavior.
+  (Tianxiao Wei)
+
 * GITHUB#22: ConstantScoreScorer#nextDocsAndScores now drains disjunction-backed iterators in bulk
   via DocIdSetIterator#intoBitSet instead of one nextDoc() call per match, and the TOP_SCORES
   iterator wrapper forwards intoBitSet/docIDRunEnd to its delegate. This avoids a priority-queue
