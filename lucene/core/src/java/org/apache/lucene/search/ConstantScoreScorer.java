@@ -213,36 +213,39 @@ public final class ConstantScoreScorer extends Scorer {
     // impact-based bulk path.
     buffer.size = 0;
     DocIdSetIterator iterator = iterator();
-    int doc = iterator.docID();
-    if (doc >= upTo) {
-      return;
-    }
-    if (bulkWindowMatches == null) {
-      bulkWindowMatches = new FixedBitSet(BULK_WINDOW_SIZE);
-    } else {
-      bulkWindowMatches.clear();
-    }
-    int windowMax = (int) Math.min(upTo, (long) doc + BULK_WINDOW_SIZE);
-    iterator.intoBitSet(windowMax, bulkWindowMatches, doc);
-    int cardinality = bulkWindowMatches.cardinality();
-    if (cardinality == 0) {
-      // No match in this window; the iterator already advanced to windowMax or beyond, the
-      // caller re-invokes for the next window.
-      return;
-    }
-    buffer.growNoCopy(cardinality);
-    int size = bulkWindowMatches.intoArray(0, windowMax - doc, doc, buffer.docs);
-    if (liveDocs != null) {
-      int kept = 0;
-      for (int i = 0; i < size; ++i) {
-        int d = buffer.docs[i];
-        if (liveDocs.get(d)) {
-          buffer.docs[kept++] = d;
-        }
+    // An empty buffer tells the caller that no doc is left before upTo, so a window that yields no
+    // live doc must not be reported as such: upTo may span more than one window. Keep loading
+    // windows until one has at least one live doc. #intoBitSet leaves the iterator at or beyond
+    // windowMax, so every iteration makes progress.
+    for (int doc = iterator.docID(); doc < upTo; doc = iterator.docID()) {
+      if (bulkWindowMatches == null) {
+        bulkWindowMatches = new FixedBitSet(BULK_WINDOW_SIZE);
+      } else {
+        bulkWindowMatches.clear();
       }
-      size = kept;
+      int windowMax = (int) Math.min(upTo, (long) doc + BULK_WINDOW_SIZE);
+      iterator.intoBitSet(windowMax, bulkWindowMatches, doc);
+      int cardinality = bulkWindowMatches.cardinality();
+      if (cardinality == 0) {
+        continue;
+      }
+      buffer.growNoCopy(cardinality);
+      int size = bulkWindowMatches.intoArray(0, windowMax - doc, doc, buffer.docs);
+      if (liveDocs != null) {
+        int kept = 0;
+        for (int i = 0; i < size; ++i) {
+          int d = buffer.docs[i];
+          if (liveDocs.get(d)) {
+            buffer.docs[kept++] = d;
+          }
+        }
+        size = kept;
+      }
+      if (size != 0) {
+        Arrays.fill(buffer.features, 0, size, score);
+        buffer.size = size;
+        return;
+      }
     }
-    Arrays.fill(buffer.features, 0, size, score);
-    buffer.size = size;
   }
 }
