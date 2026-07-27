@@ -14,6 +14,12 @@ API Changes
   
 Bug Fixes
 ---------------------
+* GITHUB#31: ConstantScoreScorer#nextDocsAndScores no longer stops when a whole window of matches
+  is deleted. The bulk drain added in GITHUB#22 left the buffer empty in that case, and callers
+  read an empty buffer as "no doc left before upTo", so a clause silently dropped its remaining
+  matches whenever upTo spanned more than one window, as it does in
+  MaxScoreBulkScorer#scoreInnerWindowSingleEssentialClause. (Chengxi Shi)
+
 * GITHUB#26: Restore HnswGraphSearcher's behavior to be consistent with 10.1. incVisitedCount(1)
   is interleaved with collect() so that MultiLeafKnnCollector's (visited & interval) == 0 sync
   trigger fires as in 10.1. (Tianxiao Wei)
