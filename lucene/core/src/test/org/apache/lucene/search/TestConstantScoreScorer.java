@@ -226,9 +226,9 @@ public class TestConstantScoreScorer extends LuceneTestCase {
 
   /**
    * An empty {@link DocAndFloatFeatureBuffer} tells callers that the iterator has no doc left
-   * before {@code upTo}, so windows whose docs are all deleted must not be reported as such.
+   * before {@code upTo}, so batches whose docs are all deleted must not be reported as such.
    */
-  public void testNextDocsAndScoresSkipsFullyDeletedWindows() throws IOException {
+  public void testNextDocsAndScoresSkipsFullyDeletedBatches() throws IOException {
     int maxDoc = 10_000;
     int firstLiveDoc = 9_000;
     Bits liveDocs =
@@ -290,8 +290,8 @@ public class TestConstantScoreScorer extends LuceneTestCase {
   }
 
   /**
-   * Randomized companion to the test above. Reaching a fully deleted window takes a doc ID range
-   * that spans more than one window together with deletions that cluster, so uniformly random
+   * Randomized companion to the test above. Reaching a fully deleted batch takes a doc ID range
+   * that spans more than one batch together with deletions that cluster, so uniformly random
    * deletions over the small indexes that most randomized tests build never get there. Scorers are
    * wrapped in {@link AssertingScorer} so that the buffer contract is checked as well.
    */
@@ -311,7 +311,7 @@ public class TestConstantScoreScorer extends LuceneTestCase {
         continue;
       }
 
-      // A run of deleted docs wide enough to swallow a whole window whatever its alignment, plus
+      // A run of deleted docs wide enough to swallow a whole batch whatever its alignment, plus
       // scattered deletions.
       FixedBitSet liveDocs = new FixedBitSet(maxDoc);
       liveDocs.set(0, maxDoc);
