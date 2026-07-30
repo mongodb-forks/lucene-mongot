@@ -95,7 +95,10 @@ public final class Lucene99HnswVectorsFormat extends KnnVectorsFormat {
    * org.apache.lucene.codecs.CodecUtil#checkIndexHeader}, which would block binary rollback during
    * the 10.4 code upgrade. {@link Lucene99HnswVectorsReader} keeps its upper bound at {@link
    * #VERSION_GROUPVARINT} explicitly so it can still read v1 segments from upstream backward-compat
-   * fixtures. Restore to the latest revision when {@code Lucene99Codec} is no longer the writer.
+   * fixtures. Callers that want vanilla-10.4 bytes must opt up by passing {@link
+   * #VERSION_GROUPVARINT} to the writeVersion constructor explicitly; the fork's {@code
+   * Lucene104HnswScalarQuantizedVectorsFormat} inherits this v0 default. Restore to the latest
+   * revision when {@code Lucene99Codec} is no longer the writer.
    */
   public static final int VERSION_CURRENT = VERSION_START;
 
@@ -266,7 +269,7 @@ public final class Lucene99HnswVectorsFormat extends KnnVectorsFormat {
    *     neighbors of the current graph size
    * @param writeVersion the version used for the writer to encode docID's (VarInt=0, GroupVarInt=1)
    */
-  Lucene99HnswVectorsFormat(
+  public Lucene99HnswVectorsFormat(
       int maxConn,
       int beamWidth,
       int numMergeWorkers,
@@ -274,6 +277,9 @@ public final class Lucene99HnswVectorsFormat extends KnnVectorsFormat {
       int tinySegmentsThreshold,
       int writeVersion) {
     super("Lucene99HnswVectorsFormat");
+    if (writeVersion < VERSION_START || writeVersion > VERSION_GROUPVARINT) {
+      throw new IllegalArgumentException("Invalid writeVersion: " + writeVersion);
+    }
     if (maxConn <= 0 || maxConn > MAXIMUM_MAX_CONN) {
       throw new IllegalArgumentException(
           "maxConn must be positive and less than or equal to "

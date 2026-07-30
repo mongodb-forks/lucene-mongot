@@ -69,7 +69,7 @@ public class Lucene90PointsWriter extends PointsWriter {
       CodecUtil.writeIndexHeader(
           dataOut,
           Lucene90PointsFormat.DATA_CODEC_NAME,
-          Lucene90PointsFormat.VERSION_CURRENT,
+          version,
           writeState.segmentInfo.getId(),
           writeState.segmentSuffix);
 
@@ -82,7 +82,7 @@ public class Lucene90PointsWriter extends PointsWriter {
       CodecUtil.writeIndexHeader(
           metaOut,
           Lucene90PointsFormat.META_CODEC_NAME,
-          Lucene90PointsFormat.VERSION_CURRENT,
+          version,
           writeState.segmentInfo.getId(),
           writeState.segmentSuffix);
 
@@ -95,7 +95,7 @@ public class Lucene90PointsWriter extends PointsWriter {
       CodecUtil.writeIndexHeader(
           indexOut,
           Lucene90PointsFormat.INDEX_CODEC_NAME,
-          Lucene90PointsFormat.VERSION_CURRENT,
+          version,
           writeState.segmentInfo.getId(),
           writeState.segmentSuffix);
 
