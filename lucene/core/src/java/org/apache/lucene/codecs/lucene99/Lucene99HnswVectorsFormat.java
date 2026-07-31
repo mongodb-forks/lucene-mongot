@@ -91,8 +91,8 @@ public final class Lucene99HnswVectorsFormat extends KnnVectorsFormat {
 
   /**
    * Matches upstream. Writers that must stay readable by Lucene 9.11.1 (the fork's {@code
-   * backward_codecs.lucene99} writers) opt down explicitly by passing {@link #VERSION_START} as
-   * the writeVersion — a 9.11 reader rejects any newer header via {@link
+   * backward_codecs.lucene99} writers) opt down explicitly by passing {@link #VERSION_START} as the
+   * writeVersion — a 9.11 reader rejects any newer header via {@link
    * org.apache.lucene.codecs.CodecUtil#checkIndexHeader}.
    */
   public static final int VERSION_CURRENT = VERSION_GROUPVARINT;
