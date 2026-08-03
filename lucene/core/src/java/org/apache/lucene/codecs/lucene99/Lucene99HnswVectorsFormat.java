@@ -90,14 +90,12 @@ public final class Lucene99HnswVectorsFormat extends KnnVectorsFormat {
   public static final int VERSION_GROUPVARINT = 1;
 
   /**
-   * Held at {@link #VERSION_START} so segments written by {@code Lucene99Codec} remain readable by
-   * Lucene 9.11.1 — a 9.11 reader rejects any newer header via {@link
-   * org.apache.lucene.codecs.CodecUtil#checkIndexHeader}, which would block binary rollback during
-   * the 10.4 code upgrade. {@link Lucene99HnswVectorsReader} keeps its upper bound at {@link
-   * #VERSION_GROUPVARINT} explicitly so it can still read v1 segments from upstream backward-compat
-   * fixtures. Restore to the latest revision when {@code Lucene99Codec} is no longer the writer.
+   * Matches upstream. Writers that must stay readable by Lucene 9.11.1 (the fork's {@code
+   * backward_codecs.lucene99} writers) opt down explicitly by passing {@link #VERSION_START} as the
+   * writeVersion — a 9.11 reader rejects any newer header via {@link
+   * org.apache.lucene.codecs.CodecUtil#checkIndexHeader}.
    */
-  public static final int VERSION_CURRENT = VERSION_START;
+  public static final int VERSION_CURRENT = VERSION_GROUPVARINT;
 
   /**
    * A maximum configurable maximum max conn.
@@ -266,7 +264,7 @@ public final class Lucene99HnswVectorsFormat extends KnnVectorsFormat {
    *     neighbors of the current graph size
    * @param writeVersion the version used for the writer to encode docID's (VarInt=0, GroupVarInt=1)
    */
-  Lucene99HnswVectorsFormat(
+  public Lucene99HnswVectorsFormat(
       int maxConn,
       int beamWidth,
       int numMergeWorkers,
@@ -274,6 +272,9 @@ public final class Lucene99HnswVectorsFormat extends KnnVectorsFormat {
       int tinySegmentsThreshold,
       int writeVersion) {
     super("Lucene99HnswVectorsFormat");
+    if (writeVersion < VERSION_START || writeVersion > VERSION_GROUPVARINT) {
+      throw new IllegalArgumentException("Invalid writeVersion: " + writeVersion);
+    }
     if (maxConn <= 0 || maxConn > MAXIMUM_MAX_CONN) {
       throw new IllegalArgumentException(
           "maxConn must be positive and less than or equal to "

@@ -3,6 +3,25 @@ Lucene Change Log
 For more information on past and future Lucene versions, please see:
 http://s.apache.org/luceneversions
 
+======================= Lucene-mongot 10.4.0-3 =======================
+
+API Changes
+---------------------
+* GITHUB#32: Restore Lucene90PointsFormat and Lucene99HnswVectorsFormat VERSION_CURRENT to the
+  upstream 10.4 values (VERSION_BKD_VECTORIZED_BPV24 / VERSION_GROUPVARINT): default construction
+  now writes vanilla 10.4 bytes. The 9.11-compatible write path opts DOWN explicitly instead —
+  backward_codecs.lucene99.Lucene99Codec and Lucene99HnswScalarQuantizedVectorsFormat pass
+  VERSION_START to their points/HNSW writers, so their output stays byte-identical to 9.11.1.
+  Version-accepting constructors made public to support explicit version selection:
+  Lucene90PointsFormat(int), the Lucene99HnswVectorsFormat writeVersion constructor, and the
+  version-taking Lucene99HnswVectorsWriter constructor (all range-checked). Lucene90PointsWriter
+  now stamps the instance version instead of VERSION_CURRENT into the .kdd/.kdi/.kdm index
+  headers, keeping headers consistent with the BKD block encoding for non-default versions.
+  NOTE for consumers upgrading from 10.4.0-2: the write-version defaults of these two formats
+  changed from v0 to the upstream values; callers that need 9.11-readable output must pass
+  VERSION_START explicitly or write through backward_codecs.lucene99.Lucene99Codec.
+  (Tianxiao Wei)
+
 ======================= Lucene-mongot 10.4.0-1 =======================
 
 API Changes
