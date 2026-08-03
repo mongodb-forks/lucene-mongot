@@ -121,7 +121,16 @@ public class Lucene99Codec extends Codec {
         new Lucene90StoredFieldsFormat(Objects.requireNonNull(mode).storedMode);
     this.defaultPostingsFormat = new Lucene99PostingsFormat();
     this.defaultDVFormat = new Lucene90DocValuesFormat();
-    this.defaultKnnVectorsFormat = new Lucene99HnswVectorsFormat();
+    // Opt down to the 9.11-compatible graph write version; the class default matches upstream
+    // 10.4 (VERSION_GROUPVARINT), which a 9.11 reader rejects.
+    this.defaultKnnVectorsFormat =
+        new Lucene99HnswVectorsFormat(
+            Lucene99HnswVectorsFormat.DEFAULT_MAX_CONN,
+            Lucene99HnswVectorsFormat.DEFAULT_BEAM_WIDTH,
+            Lucene99HnswVectorsFormat.DEFAULT_NUM_MERGE_WORKER,
+            null,
+            Lucene99HnswVectorsFormat.HNSW_GRAPH_THRESHOLD,
+            Lucene99HnswVectorsFormat.VERSION_START);
   }
 
   @Override
@@ -161,7 +170,9 @@ public class Lucene99Codec extends Codec {
 
   @Override
   public final PointsFormat pointsFormat() {
-    return new Lucene90PointsFormat();
+    // Opt down to the 9.11-compatible BKD version; the class default matches upstream 10.4
+    // (VERSION_BKD_VECTORIZED_BPV24), which a 9.11 reader rejects.
+    return new Lucene90PointsFormat(Lucene90PointsFormat.VERSION_START);
   }
 
   @Override

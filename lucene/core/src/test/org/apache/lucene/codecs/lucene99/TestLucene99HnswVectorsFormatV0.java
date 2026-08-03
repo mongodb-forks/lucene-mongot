@@ -31,7 +31,12 @@ public class TestLucene99HnswVectorsFormatV0 extends BaseKnnVectorsFormatTestCas
   protected Codec getCodec() {
     return TestUtil.alwaysKnnVectorsFormat(
         new Lucene99HnswVectorsFormat(
-            DEFAULT_MAX_CONN, DEFAULT_BEAM_WIDTH, DEFAULT_NUM_MERGE_WORKER, null, 0));
+            DEFAULT_MAX_CONN,
+            DEFAULT_BEAM_WIDTH,
+            DEFAULT_NUM_MERGE_WORKER,
+            null,
+            0,
+            Lucene99HnswVectorsFormat.VERSION_START));
   }
 
   @Override

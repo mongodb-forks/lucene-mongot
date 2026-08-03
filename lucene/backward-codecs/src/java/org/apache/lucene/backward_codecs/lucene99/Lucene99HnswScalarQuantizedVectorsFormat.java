@@ -145,9 +145,10 @@ public class Lucene99HnswScalarQuantizedVectorsFormat extends KnnVectorsFormat {
 
   @Override
   // Writer restored while {@code Lucene99Codec} is still the writer (Phase 3 of the 10.x upgrade).
-  // On-disk version is unchanged from 9.11.1, so output is binary-compatible with a 9.11 reader.
-  // Delegates to the core {@link Lucene99HnswVectorsWriter} for graph construction; the quantized
-  // payload comes from {@link #flatVectorsFormat}.
+  // Opts down to VERSION_START explicitly so output stays binary-compatible with a 9.11 reader;
+  // the writer's default matches upstream 10.4 (VERSION_GROUPVARINT). Delegates to the core
+  // {@link Lucene99HnswVectorsWriter} for graph construction; the quantized payload comes from
+  // {@link #flatVectorsFormat}.
   public KnnVectorsWriter fieldsWriter(SegmentWriteState state) throws IOException {
     return new Lucene99HnswVectorsWriter(
         state,
@@ -156,7 +157,9 @@ public class Lucene99HnswScalarQuantizedVectorsFormat extends KnnVectorsFormat {
         flatVectorsFormat,
         flatVectorsFormat.fieldsWriter(state),
         numMergeWorkers,
-        mergeExec);
+        mergeExec,
+        Lucene99HnswVectorsFormat.HNSW_GRAPH_THRESHOLD,
+        Lucene99HnswVectorsFormat.VERSION_START);
   }
 
   @Override
