@@ -367,7 +367,7 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
 
     int unfilteredVisit = HnswGraphSearcher.expectedVisitedNodes(docIdCollector.k(), graphSize);
     // Restore the 10.2 gating;: only perform exhaustive scan for filtered search.
-    if ((unfilteredVisit >= filteredDocCount && filteredDocCount < graphSize)) {
+    if (unfilteredVisit >= filteredDocCount) {
       scanAllDocs(docIdCollector, acceptDocs, sequentialScorerSupplier, scorerSupplier, numVectors);
     } else {
       HnswGraphSearcher.search(
