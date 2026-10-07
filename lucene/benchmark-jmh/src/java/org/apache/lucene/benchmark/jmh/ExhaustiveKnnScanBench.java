@@ -19,16 +19,11 @@ package org.apache.lucene.benchmark.jmh;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import org.apache.lucene.codecs.KnnVectorsReader;
 import org.apache.lucene.codecs.lucene104.Lucene104Codec;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.DoubleField;
-import org.apache.lucene.document.Field;
-import org.apache.lucene.document.IntField;
 import org.apache.lucene.document.KnnFloatVectorField;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.FloatVectorValues;
@@ -39,10 +34,9 @@ import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.SegmentReader;
 import org.apache.lucene.index.VectorSimilarityFunction;
 import org.apache.lucene.search.AcceptDocs;
-import org.apache.lucene.search.TopKnnCollector;
 import org.apache.lucene.search.TopDocs;
+import org.apache.lucene.search.TopKnnCollector;
 import org.apache.lucene.store.MMapDirectory;
-import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.hnsw.HnswGraphSearcher;
@@ -97,7 +91,6 @@ public class ExhaustiveKnnScanBench {
 
   @Setup(Level.Trial)
   public void setup() throws Exception {
-    int numVectors = (int) Math.round(N * density);
 
     // check.main mode / JMH runs can supply a prebuilt index root (per density) to avoid
     // rebuilding the index in every trial
@@ -118,7 +111,6 @@ public class ExhaustiveKnnScanBench {
     Random targetRnd = new Random(13);
     MMapDirectory dir = new MMapDirectory(tmpDir);
     if (DirectoryReader.indexExists(dir) == false) {
-      // Lucene104Codec's default KNN format is Lucene99HnswVectorsFormat, the patched reader.
       IndexWriterConfig cfg =
           new IndexWriterConfig().setCodec(new Lucene104Codec()).setRAMBufferSizeMB(1024);
       try (IndexWriter writer = new IndexWriter(dir, cfg)) {
@@ -126,7 +118,7 @@ public class ExhaustiveKnnScanBench {
           Document doc = new Document();
           if (indexRnd.nextDouble() < density) {
             float[] vec = new float[DIM];
-            for (int d = 0; d < DIM; d++) {
+            for (int d = 0; d < DIM; ++d) {
               vec[d] = indexRnd.nextFloat(-1f, 1f);
             }
             doc.add(new KnnFloatVectorField(FIELD, vec, VectorSimilarityFunction.COSINE));
@@ -145,6 +137,7 @@ public class ExhaustiveKnnScanBench {
     }
     knnReader = segReader.getVectorReader();
     vectorValues = segReader.getFloatVectorValues(FIELD);
+    int numVectors = vectorValues.size();
 
     // Filter bits at the requested selectivity over maxDoc.
     int maxDoc = segReader.maxDoc();
@@ -162,6 +155,8 @@ public class ExhaustiveKnnScanBench {
       acceptDocs = AcceptDocs.fromLiveDocs(null, maxDoc);
       accepted = maxDoc;
     }
+    checkWithinTolerance("vectors", numVectors, density * maxDoc);
+    checkWithinTolerance("accepted docs", accepted, Math.max(1, selectivity) * maxDoc);
 
     target = new float[DIM];
     for (int d = 0; d < DIM; ++d) {
@@ -175,7 +170,8 @@ public class ExhaustiveKnnScanBench {
     int graphSize = numVectors;
     int filteredDocCount = Math.min(acceptDocs.cost(), graphSize);
     int unfilteredVisit = HnswGraphSearcher.expectedVisitedNodes(k, graphSize);
-    if (unfilteredVisit <= filteredDocCount) {
+    // Mirrors the reader's HNSW condition (unfilteredVisit < filteredDocCount).
+    if (unfilteredVisit < filteredDocCount) {
       throw new IllegalStateException(
           "parameters would take the HNSW branch: k="
               + k
@@ -184,19 +180,18 @@ public class ExhaustiveKnnScanBench {
               + " filteredDocCount="
               + filteredDocCount);
     }
-    System.out.println(
-        "density="
-            + density
-            + " selectivity="
-            + selectivity
-            + " maxDoc="
-            + maxDoc
-            + " numVectors="
-            + numVectors
-            + " k="
-            + k
-            + " filteredDocCount="
-            + filteredDocCount);
+  }
+
+  /**
+   * Fails setup when a generated count strays from its expected value, e.g. a cached index built by
+   * different generation code or a filter wired to the wrong parameter.
+   */
+  private static void checkWithinTolerance(String what, int actual, double expected) {
+    // 10% relative slack plus a small absolute slack for low expected counts.
+    if (Math.abs(actual - expected) > 0.1 * expected + 50) {
+      throw new IllegalStateException(
+          "expected ~" + Math.round(expected) + " " + what + " but got " + actual);
+    }
   }
 
   @TearDown(Level.Trial)
@@ -213,82 +208,5 @@ public class ExhaustiveKnnScanBench {
     TopKnnCollector collector = new TopKnnCollector(k, Integer.MAX_VALUE);
     knnReader.search(FIELD, target, collector, acceptDocs);
     return collector.topDocs();
-  }
-
-  /** Check mode: prints a digest of the collected top-K for cross-variant comparison. */
-  public static void main(String[] args) throws Exception {
-    ExhaustiveKnnScanBench bench = new ExhaustiveKnnScanBench();
-    bench.N = Integer.parseInt(System.getProperty("check.N", "200000"));
-    bench.density = Double.parseDouble(System.getProperty("check.density", "1.0"));
-    bench.selectivity = Double.parseDouble(System.getProperty("check.selectivity", "0.01"));
-    String idx = System.getProperty("check.indexDir");
-    if (idx != null) {
-      bench.prebuiltIndex = Path.of(idx);
-      Files.createDirectories(bench.prebuiltIndex);
-    }
-    bench.setup();
-    TopDocs td = bench.searchExhaustive();
-    StringBuilder sb =
-        new StringBuilder("digest ")
-            .append(bench.density)
-            .append('/')
-            .append(bench.selectivity)
-            .append(" totalHits=")
-            .append(td.totalHits)
-            .append(" hits:");
-    for (var sd : td.scoreDocs) {
-      sb.append(' ').append(sd.doc).append(':').append(sd.score);
-    }
-    System.out.println(sb);
-
-    // Ground truth: brute-force scan of every *accepted* vector, top-k by cosine.
-    record DS(int doc, float score) {}
-    List<DS> all = new ArrayList<>();
-    Bits acceptedBits = bench.acceptDocs.bits();
-    for (int ord = 0; ord < bench.vectorValues.size(); ord++) {
-      int doc = bench.vectorValues.ordToDoc(ord);
-      if (acceptedBits != null && acceptedBits.get(doc) == false) {
-        continue;
-      }
-      all.add(
-          new DS(
-              doc,
-              VectorSimilarityFunction.COSINE.compare(
-                  bench.vectorValues.vectorValue(ord), bench.target)));
-    }
-    all.sort((a, b) -> Float.compare(b.score, a.score));
-    int n = Math.min(bench.k, all.size());
-    int docMismatches = 0;
-    float maxScoreDelta = 0;
-    for (int i = 0; i < n; i++) {
-      DS gt = all.get(i);
-      var sd = td.scoreDocs[i];
-      if (gt.doc() != sd.doc) {
-        docMismatches++;
-        System.out.println(
-            "pos "
-                + i
-                + " doc mismatch: search="
-                + sd.doc
-                + " brute="
-                + gt.doc()
-                + " scores "
-                + sd.score
-                + " vs "
-                + gt.score());
-      }
-      maxScoreDelta = Math.max(maxScoreDelta, Math.abs(gt.score() - sd.score));
-    }
-    System.out.println(
-        "RESULT "
-            + bench.density
-            + '/'
-            + bench.selectivity
-            + " n="
-            + n
-            + " docMismatches="
-            + docMismatches
-            + " maxScoreDelta="
-            + maxScoreDelta);
   }
 }

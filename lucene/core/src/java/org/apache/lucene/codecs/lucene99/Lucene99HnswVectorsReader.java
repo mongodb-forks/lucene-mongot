@@ -374,7 +374,6 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
    * @param knnCollector a collector to hold doc IDs (not ordinals) and scores of top candidates
    * @param acceptDocs An iterator over documents to score. This should minimally account for
    *     liveness and any pre-filtering. Accounting for the existence of a vector field is optional.
-   *     A null value indicates to score all vector values.
    * @param sequentialScorerSupplier produces a scorer that can score monotonic docIDs
    * @param scorerSupplier produces a scorer that can score ordinals in any order.
    * @param numVectors the number of documents (including deletions) with vector values in this
