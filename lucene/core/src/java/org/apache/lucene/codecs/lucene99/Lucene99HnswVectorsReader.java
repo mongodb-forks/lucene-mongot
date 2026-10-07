@@ -98,12 +98,18 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
     try (ChecksumIndexInput meta = state.directory.openChecksumInput(metaFileName)) {
       Throwable priorE = null;
       try {
+        // Reader upper bound is the upstream latest (v1, VERSION_GROUPVARINT), not
+        // VERSION_CURRENT — the writer is pinned to v0 for 9.11.1 rollback, but we still need to
+        // read v1 segments from upstream backward-compat fixtures (e.g.
+        // TestInt7HnswBackwardsCompatibility
+        // ships v1-formatted HNSW data). Same pattern Lucene94FieldInfosFormatV1 uses. Restore to
+        // VERSION_CURRENT in Phase 4.
         versionMeta =
             CodecUtil.checkIndexHeader(
                 meta,
                 Lucene99HnswVectorsFormat.META_CODEC_NAME,
                 Lucene99HnswVectorsFormat.VERSION_START,
-                Lucene99HnswVectorsFormat.VERSION_CURRENT,
+                Lucene99HnswVectorsFormat.VERSION_GROUPVARINT,
                 state.segmentInfo.getId(),
                 state.segmentSuffix);
         readFields(meta);
@@ -170,7 +176,7 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
               in,
               codecName,
               Lucene99HnswVectorsFormat.VERSION_START,
-              Lucene99HnswVectorsFormat.VERSION_CURRENT,
+              Lucene99HnswVectorsFormat.VERSION_GROUPVARINT,
               state.segmentInfo.getId(),
               state.segmentSuffix);
       if (versionMeta != versionVectorData) {
@@ -354,6 +360,7 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
     // size as that is illogical
     int filteredDocCount = Math.min(acceptDocs.cost(), graphSize);
     // The approximate number of vectors that would be visited if we did not filter
+<<<<<<< HEAD
     int unfilteredVisit = HnswGraphSearcher.expectedVisitedNodes(docIdCollector.k(), graphSize);
     if (unfilteredVisit < filteredDocCount && docIdCollector.k() < numVectors) {
       final RandomVectorScorer scorer = scorerSupplier.get();
@@ -361,6 +368,14 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
           new OrdinalTranslatedKnnCollector(docIdCollector, scorer::ordToDoc);
       final Bits acceptedOrds = scorer.getAcceptOrds(acceptDocs.bits());
 
+=======
+    int unfilteredVisit = HnswGraphSearcher.expectedVisitedNodes(knnCollector.k(), graphSize);
+    // Restore the 10.2 gating;: only perform exhaustive scan for filtered search.
+    if ((unfilteredVisit >= filteredDocCount && filteredDocCount < graphSize) || graphSize == 0) {
+      doHnsw = false;
+    }
+    if (doHnsw) {
+>>>>>>> origin/mongot_10_4_0
       HnswGraphSearcher.search(
           scorer, collector, getGraph(fieldEntry), acceptedOrds, filteredDocCount);
     } else {

@@ -188,7 +188,15 @@ public class Lucene99ScalarQuantizedVectorScorer implements FlatVectorsScorer {
     public float score(int vectorOrdinal) throws IOException {
       byte[] storedVector = values.vectorValue(vectorOrdinal);
       float vectorOffset = values.getScoreCorrectionConstant(vectorOrdinal);
-      int dotProduct = VectorUtil.uint8DotProduct(storedVector, targetBytes);
+      // For 7-bit quantization the signed and unsigned kernels are numerically identical
+      // (top bit always 0), but the signed kernel intrinsifies on aarch64 NEON while the
+      // unsigned kernel falls into a Java software fallback (no aarch64 match rule for
+      // ZERO_EXTEND_B2S / ZERO_EXTEND_S2I as of JDK 21.0.x). Mirrors the kernel choice
+      // already done in Lucene104ScalarQuantizedVectorScorer.
+      int dotProduct =
+          values.getScalarQuantizer().getBits() == 7
+              ? VectorUtil.dotProduct(storedVector, targetBytes)
+              : VectorUtil.uint8DotProduct(storedVector, targetBytes);
       // For the current implementation of scalar quantization, all dotproducts should
       // be >= 0;
       assert dotProduct >= 0;

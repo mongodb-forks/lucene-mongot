@@ -124,7 +124,7 @@ public final class Lucene99HnswVectorsWriter extends KnnVectorsWriter {
         VERSION_CURRENT);
   }
 
-  Lucene99HnswVectorsWriter(
+  public Lucene99HnswVectorsWriter(
       SegmentWriteState state,
       int M,
       int beamWidth,
@@ -134,6 +134,10 @@ public final class Lucene99HnswVectorsWriter extends KnnVectorsWriter {
       int tinySegmentsThreshold,
       int version)
       throws IOException {
+    if (version < Lucene99HnswVectorsFormat.VERSION_START
+        || version > Lucene99HnswVectorsFormat.VERSION_GROUPVARINT) {
+      throw new IllegalArgumentException("Invalid version: " + version);
+    }
     this.M = M;
     this.flatVectorWriter = flatVectorWriter;
     this.beamWidth = beamWidth;

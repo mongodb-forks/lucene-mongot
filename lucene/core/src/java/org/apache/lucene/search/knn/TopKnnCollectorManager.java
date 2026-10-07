@@ -22,15 +22,24 @@ import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.KnnCollector;
 import org.apache.lucene.search.TopKnnCollector;
+import org.apache.lucene.util.hnsw.BlockingFloatHeap;
 
-/** TopKnnCollectorManager responsible for creating {@link TopKnnCollector} instances. */
+/**
+ * TopKnnCollectorManager responsible for creating {@link TopKnnCollector} instances. When
+ * concurrency is supported, the {@link BlockingFloatHeap} is used to track the global top scores
+ * collected across all leaves.
+ */
 public class TopKnnCollectorManager implements KnnCollectorManager {
 
   // the number of docs to collect
   private final int k;
+  // the global score queue used to track the top scores collected across all leaves
+  private final BlockingFloatHeap globalScoreQueue;
 
   public TopKnnCollectorManager(int k, IndexSearcher indexSearcher) {
+    boolean isMultiSegments = indexSearcher.getIndexReader().leaves().size() > 1;
     this.k = k;
+    this.globalScoreQueue = isMultiSegments ? new BlockingFloatHeap(k) : null;
   }
 
   /**
@@ -43,17 +52,11 @@ public class TopKnnCollectorManager implements KnnCollectorManager {
   public KnnCollector newCollector(
       int visitedLimit, KnnSearchStrategy searchStrategy, LeafReaderContext context)
       throws IOException {
-    return new TopKnnCollector(k, visitedLimit, searchStrategy);
-  }
-
-  @Override
-  public KnnCollector newOptimisticCollector(
-      int visitedLimit, KnnSearchStrategy searchStrategy, LeafReaderContext context, int k) {
-    return new TopKnnCollector(k, visitedLimit, searchStrategy);
-  }
-
-  @Override
-  public boolean isOptimistic() {
-    return true;
+    if (globalScoreQueue == null) {
+      return new TopKnnCollector(k, visitedLimit, searchStrategy);
+    } else {
+      return new MultiLeafKnnCollector(
+          k, globalScoreQueue, new TopKnnCollector(k, visitedLimit, searchStrategy));
+    }
   }
 }
