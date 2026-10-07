@@ -350,7 +350,7 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
     }
 
     int graphSize = (fieldEntry.vectorIndexLength() == 0) ? 0 : numVectors;
-    if (graphSize == 0) {
+    if (graphSize == 0 || docIdCollector.k() >= numVectors) {
       scanAllDocs(docIdCollector, acceptDocs, sequentialScorerSupplier, scorerSupplier, numVectors);
       return;
     }
@@ -367,7 +367,7 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
 
     int unfilteredVisit = HnswGraphSearcher.expectedVisitedNodes(docIdCollector.k(), graphSize);
     // Restore the 10.2 gating;: only perform exhaustive scan for filtered search.
-    if (unfilteredVisit >= filteredDocCount) {
+    if (unfilteredVisit >= filteredDocCount && filteredDocCount < graphSize) {
       scanAllDocs(docIdCollector, acceptDocs, sequentialScorerSupplier, scorerSupplier, numVectors);
     } else {
       HnswGraphSearcher.search(
