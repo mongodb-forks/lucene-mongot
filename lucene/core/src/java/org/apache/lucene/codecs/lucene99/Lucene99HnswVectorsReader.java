@@ -361,7 +361,7 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
     int filteredDocCount = Math.min(acceptDocs.cost(), graphSize);
     // The approximate number of vectors that would be visited if we did not filter
     final RandomVectorScorer scorer = scorerSupplier.get();
-    final KnnCollector collector =
+    final KnnCollector ordCollector =
         new OrdinalTranslatedKnnCollector(docIdCollector, scorer::ordToDoc);
     final Bits acceptedOrds = scorer.getAcceptOrds(acceptDocs.bits());
 
@@ -369,7 +369,7 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
     // Restore the 10.2 gating;: only perform exhaustive scan for filtered search.
     if ((unfilteredVisit >= filteredDocCount && filteredDocCount < graphSize)) {
       HnswGraphSearcher.search(
-          scorer, collector, getGraph(fieldEntry), acceptedOrds, filteredDocCount);
+          scorer, ordCollector, getGraph(fieldEntry), acceptedOrds, filteredDocCount);
     } else {
       scanAllDocs(docIdCollector, acceptDocs, sequentialScorerSupplier, scorerSupplier, numVectors);
     }
@@ -382,7 +382,7 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
    * checking the filter vs iterating over the filter and checking for the existence of vectors.
    * This relies on the caller providing accurate cost estimates in `acceptDocs`
    *
-   * @param knnCollector a collector to hold doc IDs (not ordinals) and scores of top candidates
+   * @param docIdCollector a collector that accepts doc IDs and scores of top candidates
    * @param acceptDocs An iterator over documents to score. This should minimally account for
    *     liveness and any pre-filtering. Accounting for the existence of a vector field is optional.
    * @param sequentialScorerSupplier produces a scorer that can score monotonic docIDs
@@ -391,7 +391,7 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
    *     segment.
    */
   private static void scanAllDocs(
-      KnnCollector knnCollector,
+      KnnCollector docIdCollector,
       AcceptDocs acceptDocs,
       IOSupplier<VectorScorer> sequentialScorerSupplier,
       IOSupplier<RandomVectorScorer> scorerSupplier,
@@ -402,7 +402,7 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
       // Case 1: No explicit filter and no deleted documents, so let's just iterate over vector ords
       // Case 2: acceptDocs doesn't account for FieldExistsQuery, so it's probably just livedocs,
       //         and scoring ords should be fast for both dense and sparse vector values.
-      bulkScoreOrds(knnCollector, scorerSupplier, bits);
+      bulkScoreOrds(docIdCollector, scorerSupplier, bits);
       return;
     }
 
@@ -415,16 +415,16 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
         buffer.size > 0;
         maxScore = bulkScorer.nextDocsAndScores(DocIdSetIterator.NO_MORE_DOCS, null, buffer)) {
 
-      if (maxScore >= knnCollector.minCompetitiveSimilarity()) {
+      if (maxScore >= docIdCollector.minCompetitiveSimilarity()) {
         for (int i = 0; i < buffer.size; ++i) {
           float score = buffer.features[i];
           int doc = buffer.docs[i];
-          knnCollector.collect(doc, score);
+          docIdCollector.collect(doc, score);
         }
       }
 
-      knnCollector.incVisitedCount(buffer.size);
-      if (knnCollector.earlyTerminated()) {
+      docIdCollector.incVisitedCount(buffer.size);
+      if (docIdCollector.earlyTerminated()) {
         // Respect query timeout
         break;
       }
