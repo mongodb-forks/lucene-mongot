@@ -156,7 +156,7 @@ public class ExhaustiveKnnScanBench {
       accepted = maxDoc;
     }
     checkWithinTolerance("vectors", numVectors, density * maxDoc);
-    checkWithinTolerance("accepted docs", accepted, Math.max(1, selectivity) * maxDoc);
+    checkWithinTolerance("accepted docs", accepted, Math.min(1, selectivity) * maxDoc);
 
     target = new float[DIM];
     for (int d = 0; d < DIM; ++d) {
