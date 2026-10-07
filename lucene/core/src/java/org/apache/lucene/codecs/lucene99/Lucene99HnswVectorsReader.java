@@ -360,22 +360,14 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
     // size as that is illogical
     int filteredDocCount = Math.min(acceptDocs.cost(), graphSize);
     // The approximate number of vectors that would be visited if we did not filter
-<<<<<<< HEAD
-    int unfilteredVisit = HnswGraphSearcher.expectedVisitedNodes(docIdCollector.k(), graphSize);
-    if (unfilteredVisit < filteredDocCount && docIdCollector.k() < numVectors) {
-      final RandomVectorScorer scorer = scorerSupplier.get();
-      final KnnCollector collector =
-          new OrdinalTranslatedKnnCollector(docIdCollector, scorer::ordToDoc);
-      final Bits acceptedOrds = scorer.getAcceptOrds(acceptDocs.bits());
+    final RandomVectorScorer scorer = scorerSupplier.get();
+    final KnnCollector collector =
+        new OrdinalTranslatedKnnCollector(docIdCollector, scorer::ordToDoc);
+    final Bits acceptedOrds = scorer.getAcceptOrds(acceptDocs.bits());
 
-=======
-    int unfilteredVisit = HnswGraphSearcher.expectedVisitedNodes(knnCollector.k(), graphSize);
+    int unfilteredVisit = HnswGraphSearcher.expectedVisitedNodes(docIdCollector.k(), graphSize);
     // Restore the 10.2 gating;: only perform exhaustive scan for filtered search.
-    if ((unfilteredVisit >= filteredDocCount && filteredDocCount < graphSize) || graphSize == 0) {
-      doHnsw = false;
-    }
-    if (doHnsw) {
->>>>>>> origin/mongot_10_4_0
+    if ((unfilteredVisit >= filteredDocCount && filteredDocCount < graphSize)) {
       HnswGraphSearcher.search(
           scorer, collector, getGraph(fieldEntry), acceptedOrds, filteredDocCount);
     } else {
