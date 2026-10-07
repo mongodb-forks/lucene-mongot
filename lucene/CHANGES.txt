@@ -36,7 +36,7 @@ API Changes
 
 * GITHUB#15636: Introduce TermsEnum.preferSeekExact(). Update and delete processing obey this setting,
   allowing bloom or other approximate membership filters to apply in these paths. (Trevor McCulloch)
-
+  
 Bug Fixes
 ---------------------
 * GITHUB#31: ConstantScoreScorer#nextDocsAndScores no longer stops when a whole batch of matches
@@ -98,7 +98,7 @@ Optimizations
   ToParentBlockJoinQuery) opt in: their per-document score is expensive and they expose no useful
   impacts, so buffering and scoring the whole lead window up front is pure overhead and can roughly
   double latency for scored block-join conjunctions. Matches and scores are unchanged. (Tianxiao Wei)
-
+ 
 ======================= Lucene 10.4.0 =======================
 
 API Changes
@@ -255,7 +255,7 @@ Optimizations
 
 * GITHUB#15498: ExitableDirectoryReader keeps singleton SortedSetDocValues or SortedNumericDocValues as singletons. (Houston Putman)
 
-* GITHUB#15511, GITHUB#15696, GITHUB#15709: Dynamic pruning for SORTED(_SET) fields with doc
+* GITHUB#15511, GITHUB#15696, GITHUB#15709, GITHUB#15741: Dynamic pruning for SORTED(_SET) fields with doc
   values skipper (Pan Guixin, Alan Woodward)
 
 * GITHUB#15560: Avoid unnecessary getGraph() call. (Shubham Chaudhary)
@@ -21519,3 +21519,4 @@ First open source release.
 The code has been re-organized into a new package and directory
 structure for this release.  It builds OK, but has not been tested
 beyond that since the re-organization.
+
