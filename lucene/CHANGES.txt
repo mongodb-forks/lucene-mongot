@@ -3,6 +3,102 @@ Lucene Change Log
 For more information on past and future Lucene versions, please see:
 http://s.apache.org/luceneversions
 
+======================= Lucene-mongot 10.4.0-4 =======================
+
+Optimizations
+---------------------
+* GITHUB#32 Faster exhaustive search in Lucene99HnswVectorsReader
+
+======================= Lucene-mongot 10.4.0-3 =======================
+
+API Changes
+---------------------
+* GITHUB#32: Restore Lucene90PointsFormat and Lucene99HnswVectorsFormat VERSION_CURRENT to the
+  upstream 10.4 values (VERSION_BKD_VECTORIZED_BPV24 / VERSION_GROUPVARINT): default construction
+  now writes vanilla 10.4 bytes. The 9.11-compatible write path opts DOWN explicitly instead —
+  backward_codecs.lucene99.Lucene99Codec and Lucene99HnswScalarQuantizedVectorsFormat pass
+  VERSION_START to their points/HNSW writers, so their output stays byte-identical to 9.11.1.
+  Version-accepting constructors made public to support explicit version selection:
+  Lucene90PointsFormat(int), the Lucene99HnswVectorsFormat writeVersion constructor, and the
+  version-taking Lucene99HnswVectorsWriter constructor (all range-checked). Lucene90PointsWriter
+  now stamps the instance version instead of VERSION_CURRENT into the .kdd/.kdi/.kdm index
+  headers, keeping headers consistent with the BKD block encoding for non-default versions.
+  NOTE for consumers upgrading from 10.4.0-2: the write-version defaults of these two formats
+  changed from v0 to the upstream values; callers that need 9.11-readable output must pass
+  VERSION_START explicitly or write through backward_codecs.lucene99.Lucene99Codec.
+  (Tianxiao Wei)
+
+======================= Lucene-mongot 10.4.0-1 =======================
+
+API Changes
+---------------------
+* GITHUB #15: Restore Lucene99Codec write support for 9.11 backward compatability in 10.4.0
+
+* GITHUB#15636: Introduce TermsEnum.preferSeekExact(). Update and delete processing obey this setting,
+  allowing bloom or other approximate membership filters to apply in these paths. (Trevor McCulloch)
+
+Bug Fixes
+---------------------
+* GITHUB#31: ConstantScoreScorer#nextDocsAndScores no longer stops when a whole batch of matches
+  is deleted. The bulk drain added in GITHUB#22 left the buffer empty in that case, and callers
+  read an empty buffer as "no doc left before upTo", so a clause silently dropped its remaining
+  matches whenever upTo spanned more than one batch, as it does in
+  MaxScoreBulkScorer#scoreInnerWindowSingleEssentialClause. The drain is now built on
+  DocIdSetIterator#intoArray, matching the implementation accepted upstream in
+  apache/lucene#16394. (Chengxi Shi)
+
+* GITHUB#26: Restore HnswGraphSearcher's behavior to be consistent with 10.1. incVisitedCount(1)
+  is interleaved with collect() so that MultiLeafKnnCollector's (visited & interval) == 0 sync
+  trigger fires as in 10.1. (Tianxiao Wei)
+
+* GITHUB#16400: Restore HNSW graph reuse during merges under per-field vectors formats,
+  including the default codec. Since 10.4.0 the merger tested the per-field wrapper instead
+  of the unwrapped reader, so every merge rebuilt the graph from scratch. (Jeho Jeong)
+
+* GITHUB#16176: Restore WANDScorer dispatch for SHOULD-only BooleanQuery with
+  TOP_SCORES and minShouldMatch > 1. The Lucene 10.0 refactor in GITHUB#13408
+  unintentionally routed this shape to BooleanScorer, which lacks block-max
+  impact pruning and regressed top-K latency on dense matches. (Tianxiao Wei)
+
+Optimizations
+---------------------
+* GITHUB#29: Revert the default kNN search to the pre-10.3 single-wave multi-leaf collection:
+  TopKnnCollectorManager again shares a global score queue across leaves (MultiLeafKnnCollector)
+  instead of opting into the two-phase "optimistic" search, whose second executor wave reduced
+  concurrent query parallelism. The perLeafTopK-based exact-search fallback in
+  AbstractKnnVectorQuery is removed accordingly. (Tianxiao Wei)
+
+* GITHUB#30: Lucene99HnswVectorReader only performs exhaustive scan when unfilteredVisited >=
+  filtededDocCount for filtered search, not for unfiltered search. This restores the 10.1 behavior.
+  (Tianxiao Wei)
+
+* GITHUB#22: ConstantScoreScorer#nextDocsAndScores now drains disjunction-backed iterators in bulk
+  via DocIdSetIterator#intoBitSet instead of one nextDoc() call per match, and the TOP_SCORES
+  iterator wrapper forwards intoBitSet/docIDRunEnd to its delegate. This avoids a priority-queue
+  update per matching doc per clause under MaxScoreBulkScorer's term-at-a-time scoring
+  (GITHUB#14701), which regressed top-k disjunctions of dense constant-score term-set clauses.
+  Iterators that are cheap to advance one doc at a time keep the doc-at-a-time loop. (Chengxi Shi)
+
+* GITHUB#16222: MultiTermQuery constant-score wrapper now defers term collection to ScorerSupplier#get()
+  for queries with an unknown term count (automaton queries such as wildcard/regexp/prefix/range),
+  instead of scanning the term dictionary while building the ScorerSupplier. This keeps the
+  ScorerSupplier "planning" phase cheap so a parent conjunction can short-circuit (e.g. a sibling
+  clause matching no documents) before a non-seekable scan, such as a leading wildcard, runs.
+  (Tianxiao Wei)
+
+* GITHUB#21: Use signed dotProduct kernel instead of uint8DotProduct for 7-bit scalar
+  quantization in Lucene99ScalarQuantizedVectorScorer and
+  Lucene99MemorySegmentScalarQuantizedVectorScorer. For 7-bit values the kernels are
+  numerically equivalent, but the signed variant intrinsifies on aarch64 NEON while the
+  unsigned variant falls into a Java software fallback. (Tianxiao Wei)
+
+* GITHUB#23: Add Scorer#preferDocAtATimeWindowScoring() (default false) so a lead clause can opt a
+  top-level conjunction out of the score-first window path (GITHUB#14701) and back to doc-at-a-time
+  window scoring in BlockMaxConjunctionBulkScorer. Block-join scorers (ToChildBlockJoinQuery /
+  ToParentBlockJoinQuery) opt in: their per-document score is expensive and they expose no useful
+  impacts, so buffering and scoring the whole lead window up front is pure overhead and can roughly
+  double latency for scored block-join conjunctions. Matches and scores are unchanged. (Tianxiao Wei)
+
 ======================= Lucene 10.4.0 =======================
 
 API Changes
@@ -91,7 +187,7 @@ New Features
  * GITHUB#15518: Add support for post-collection faceting to the new faceting API in the sandbox module. (Egor Potemkin)
 
  * GITHUB#14792: Introduced OffHeapQuantizedFloatVectorValues class to access float vectors when only quantized byte vectors are available in the index. (Pulkit Gupta)
- 
+
  * GITHUB#15591: Add SegmentOrder helper class to re-order segments at query time to align with sorts. (Alan Woodward)
 
 Improvements
@@ -159,7 +255,7 @@ Optimizations
 
 * GITHUB#15498: ExitableDirectoryReader keeps singleton SortedSetDocValues or SortedNumericDocValues as singletons. (Houston Putman)
 
-* GITHUB#15511, GITHUB#15696, GITHUB#15709: Dynamic pruning for SORTED(_SET) fields with doc
+* GITHUB#15511, GITHUB#15696, GITHUB#15709, GITHUB#15741: Dynamic pruning for SORTED(_SET) fields with doc
   values skipper (Pan Guixin, Alan Woodward)
 
 * GITHUB#15560: Avoid unnecessary getGraph() call. (Shubham Chaudhary)
