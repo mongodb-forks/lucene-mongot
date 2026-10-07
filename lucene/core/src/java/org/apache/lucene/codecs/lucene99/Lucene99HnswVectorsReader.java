@@ -345,12 +345,13 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
       IOSupplier<RandomVectorScorer> scorerSupplier)
       throws IOException {
     int numVectors = fieldEntry.size();
-    if (numVectors == 0 || docIdCollector.k() == 0) {
+    int k = docIdCollector.k();
+    if (numVectors == 0 || k == 0) {
       return;
     }
 
     int graphSize = (fieldEntry.vectorIndexLength() == 0) ? 0 : numVectors;
-    if (graphSize == 0 || docIdCollector.k() >= numVectors) {
+    if (graphSize == 0 || k >= numVectors) {
       scanAllDocs(docIdCollector, acceptDocs, sequentialScorerSupplier, scorerSupplier, numVectors);
       return;
     }
@@ -365,7 +366,7 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
         new OrdinalTranslatedKnnCollector(docIdCollector, scorer::ordToDoc);
     final Bits acceptedOrds = scorer.getAcceptOrds(acceptDocs.bits());
 
-    int unfilteredVisit = HnswGraphSearcher.expectedVisitedNodes(docIdCollector.k(), graphSize);
+    int unfilteredVisit = HnswGraphSearcher.expectedVisitedNodes(k, graphSize);
     // Restore the 10.2 gating;: only perform exhaustive scan for filtered search.
     if (unfilteredVisit >= filteredDocCount && filteredDocCount < graphSize) {
       scanAllDocs(docIdCollector, acceptDocs, sequentialScorerSupplier, scorerSupplier, numVectors);
