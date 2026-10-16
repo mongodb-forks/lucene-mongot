@@ -98,7 +98,8 @@ public abstract class KnnSearchStrategy {
      */
     public final boolean useFilteredSearch(float ratioPassingFilter) {
       assert ratioPassingFilter >= 0 && ratioPassingFilter <= 1;
-      return ratioPassingFilter * 100 < filteredSearchThreshold;
+      float selectivity = ratioPassingFilter * 100;
+      return selectivity < filteredSearchThreshold && selectivity > filteredSearchMin;
     }
 
     @Override
