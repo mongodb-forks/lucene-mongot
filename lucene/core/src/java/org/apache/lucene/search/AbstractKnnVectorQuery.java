@@ -111,7 +111,7 @@ abstract class AbstractKnnVectorQuery extends Query {
         new TimeLimitingKnnCollectorManager(optimisticCollectorManager, indexSearcher.getTimeout());
     TaskExecutor taskExecutor = indexSearcher.getTaskExecutor();
     List<LeafReaderContext> leafReaderContexts = new ArrayList<>(reader.leaves());
-    leafReaderContexts.sort(Comparator.comparing(ctx -> ctx.reader().maxDoc()));
+    leafReaderContexts.sort(Comparator.comparing(ctx -> -ctx.reader().maxDoc()));
     List<Callable<TopDocs>> tasks = new ArrayList<>(leafReaderContexts.size());
     for (LeafReaderContext context : leafReaderContexts) {
       tasks.add(() -> searchLeaf(context, filterWeight, timeLimitingKnnCollectorManager));
