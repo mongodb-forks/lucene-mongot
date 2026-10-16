@@ -18,6 +18,7 @@ package org.apache.lucene.search;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -110,6 +111,7 @@ abstract class AbstractKnnVectorQuery extends Query {
         new TimeLimitingKnnCollectorManager(optimisticCollectorManager, indexSearcher.getTimeout());
     TaskExecutor taskExecutor = indexSearcher.getTaskExecutor();
     List<LeafReaderContext> leafReaderContexts = new ArrayList<>(reader.leaves());
+    leafReaderContexts.sort(Comparator.comparing(ctx -> -ctx.reader().maxDoc()));
     List<Callable<TopDocs>> tasks = new ArrayList<>(leafReaderContexts.size());
     for (LeafReaderContext context : leafReaderContexts) {
       tasks.add(() -> searchLeaf(context, filterWeight, timeLimitingKnnCollectorManager));
