@@ -53,6 +53,7 @@ public abstract class KnnSearchStrategy {
     public static final Hnsw DEFAULT = new Hnsw(DEFAULT_FILTERED_SEARCH_THRESHOLD);
 
     private final int filteredSearchThreshold;
+    private final int filteredSearchMin;
 
     /**
      * Create a new Hnsw strategy
@@ -61,9 +62,27 @@ public abstract class KnnSearchStrategy {
      *     100 where 0 means never use filtered search and 100 means always use filtered search.
      */
     public Hnsw(int filteredSearchThreshold) {
-      if (filteredSearchThreshold < 0 || filteredSearchThreshold > 100) {
+      this(0, filteredSearchThreshold);
+    }
+
+    /**
+     * Create a new Hnsw strategy
+     *
+     * @param filteredSearchMin minimum selectivity for filtered search. A percentage value from 0
+     *     to `filteredSearchThreshold` whereas value p means filtered search will be disabled if
+     *     the filter is more-selective that p%.
+     * @param filteredSearchThreshold threshold for filtered search, a percentage value from 0 to
+     *     100 where 0 means never use filtered search and 100 means always use filtered search.
+     */
+    public Hnsw(int filteredSearchMin, int filteredSearchThreshold) {
+      if (filteredSearchMin < 0 || filteredSearchMin > filteredSearchThreshold) {
+        throw new IllegalArgumentException(
+            "filteredSearchMin must be >= 0 and <= `filteredSearchThreshold`");
+      }
+      if (filteredSearchThreshold > 100) {
         throw new IllegalArgumentException("filteredSearchThreshold must be >= 0 and <= 100");
       }
+      this.filteredSearchMin = filteredSearchMin;
       this.filteredSearchThreshold = filteredSearchThreshold;
     }
 
