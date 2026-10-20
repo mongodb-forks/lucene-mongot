@@ -42,7 +42,9 @@ import org.apache.lucene.search.AcceptDocs;
 import org.apache.lucene.search.DocAndFloatFeatureBuffer;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.KnnCollector;
+import org.apache.lucene.search.KnnResult;
 import org.apache.lucene.search.VectorScorer;
+import org.apache.lucene.search.knn.KnnSearchStrategy;
 import org.apache.lucene.store.ChecksumIndexInput;
 import org.apache.lucene.store.DataAccessHint;
 import org.apache.lucene.store.DataInput;
@@ -352,6 +354,7 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
 
     int graphSize = (fieldEntry.vectorIndexLength() == 0) ? 0 : numVectors;
     if (graphSize == 0 || k >= numVectors) {
+      docIdCollector.setStrategy(KnnResult.Strategy.EXACT);
       scanAllDocs(docIdCollector, acceptDocs, sequentialScorerSupplier, scorerSupplier, numVectors);
       return;
     }
@@ -366,13 +369,33 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
         new OrdinalTranslatedKnnCollector(docIdCollector, scorer::ordToDoc);
     final Bits acceptedOrds = scorer.getAcceptOrds(acceptDocs.bits());
 
-    int unfilteredVisit = HnswGraphSearcher.expectedVisitedNodes(k, graphSize);
-    // Restore the 10.2 gating;: only perform exhaustive scan for filtered search.
-    if (unfilteredVisit >= filteredDocCount && filteredDocCount < graphSize) {
-      scanAllDocs(docIdCollector, acceptDocs, sequentialScorerSupplier, scorerSupplier, numVectors);
+    // The approximate number of vectors that would be visited if we did not filter
+    boolean doHnsw = true;
+    if (filteredDocCount == 0) {
+      // nothing passes the filter: the exhaustive scan is trivially cheaper
+      doHnsw = false;
     } else {
+      float selectivity = (float) (filteredDocCount / (double) graphSize);
+      KnnSearchStrategy strat = docIdCollector.getSearchStrategy();
+      if (strat == null) {
+        strat = KnnSearchStrategy.Hnsw.DEFAULT;
+      }
+      double filterPenalty = strat.getFilteredSearchPenality(selectivity);
+      int unfilteredVisit =
+          (int)
+              (filterPenalty * HnswGraphSearcher.expectedVisitedNodes(k, graphSize, fieldEntry.M));
+      if (unfilteredVisit >= filteredDocCount) {
+        doHnsw = false;
+      }
+    }
+    if (doHnsw) {
       HnswGraphSearcher.search(
           scorer, ordCollector, getGraph(fieldEntry), acceptedOrds, filteredDocCount);
+    } else {
+      docIdCollector.setStrategy(KnnResult.Strategy.EXACT);
+      // if k is larger than the number of vectors we expect to visit in an HNSW search,
+      // we can just iterate over all vectors and collect them.
+      scanAllDocs(docIdCollector, acceptDocs, sequentialScorerSupplier, scorerSupplier, numVectors);
     }
   }
 
@@ -416,7 +439,7 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
         buffer.size > 0;
         maxScore = bulkScorer.nextDocsAndScores(DocIdSetIterator.NO_MORE_DOCS, null, buffer)) {
 
-      if (maxScore >= docIdCollector.minCompetitiveSimilarity()) {
+      if (maxScore >= docIdCollector.minCollectableSimilarity()) {
         for (int i = 0; i < buffer.size; ++i) {
           float score = buffer.features[i];
           int doc = buffer.docs[i];
@@ -454,7 +477,7 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
         ords[numOrds++] = i;
         if (numOrds == ords.length) {
           knnCollector.incVisitedCount(numOrds);
-          float minScore = knnCollector.minCompetitiveSimilarity();
+          float minScore = knnCollector.minCollectableSimilarity();
           if (scorer.bulkScore(ords, scores, numOrds) > minScore) {
             for (int j = 0; j < numOrds; j++) {
               if (scores[j] > minScore) {
@@ -468,7 +491,7 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
     }
     if (numOrds > 0) {
       knnCollector.incVisitedCount(numOrds);
-      float minScore = knnCollector.minCompetitiveSimilarity();
+      float minScore = knnCollector.minCollectableSimilarity();
       if (scorer.bulkScore(ords, scores, numOrds) > minScore) {
         for (int j = 0; j < numOrds; j++) {
           if (scores[j] > minScore) {

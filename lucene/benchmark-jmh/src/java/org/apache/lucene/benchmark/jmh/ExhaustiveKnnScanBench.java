@@ -207,6 +207,6 @@ public class ExhaustiveKnnScanBench {
   public TopDocs searchExhaustive() throws IOException {
     TopKnnCollector collector = new TopKnnCollector(k, Integer.MAX_VALUE);
     knnReader.search(FIELD, target, collector, acceptDocs);
-    return collector.topDocs();
+    return collector.topDocs().topDocs();
   }
 }

@@ -53,10 +53,10 @@ public class TopKnnCollectorManager implements KnnCollectorManager {
       int visitedLimit, KnnSearchStrategy searchStrategy, LeafReaderContext context)
       throws IOException {
     if (globalScoreQueue == null) {
-      return new TopKnnCollector(k, visitedLimit, searchStrategy);
+      return new TopKnnCollector(k, k, visitedLimit, searchStrategy);
     } else {
       return new MultiLeafKnnCollector(
-          k, globalScoreQueue, new TopKnnCollector(k, visitedLimit, searchStrategy));
+          k, globalScoreQueue, new TopKnnCollector(k, k, visitedLimit, searchStrategy));
     }
   }
 }

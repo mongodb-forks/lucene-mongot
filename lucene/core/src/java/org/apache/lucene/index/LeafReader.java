@@ -268,7 +268,7 @@ public abstract non-sealed class LeafReader extends IndexReader {
     }
     KnnCollector collector = new TopKnnCollector(k, visitedLimit);
     searchNearestVectors(field, target, collector, acceptDocs);
-    return collector.topDocs();
+    return collector.topDocs().topDocs();
   }
 
   /**
@@ -312,7 +312,7 @@ public abstract non-sealed class LeafReader extends IndexReader {
     }
     KnnCollector collector = new TopKnnCollector(k, visitedLimit);
     searchNearestVectors(field, target, collector, acceptDocs);
-    return collector.topDocs();
+    return collector.topDocs().topDocs();
   }
 
   /**

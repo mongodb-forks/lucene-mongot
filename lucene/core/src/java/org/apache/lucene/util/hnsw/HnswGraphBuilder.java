@@ -30,7 +30,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import org.apache.lucene.internal.hppc.IntHashSet;
 import org.apache.lucene.search.KnnCollector;
-import org.apache.lucene.search.TopDocs;
+import org.apache.lucene.search.KnnResult;
 import org.apache.lucene.search.knn.KnnSearchStrategy;
 import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.InfoStream;
@@ -710,7 +710,7 @@ public class HnswGraphBuilder implements HnswBuilder {
     }
 
     @Override
-    public TopDocs topDocs() {
+    public KnnResult topDocs() {
       throw new IllegalArgumentException();
     }
 
@@ -718,5 +718,8 @@ public class HnswGraphBuilder implements HnswBuilder {
     public KnnSearchStrategy getSearchStrategy() {
       return null;
     }
+
+    @Override
+    public void setStrategy(KnnResult.Strategy strategy) {}
   }
 }
