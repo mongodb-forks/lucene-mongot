@@ -43,6 +43,7 @@ import org.apache.lucene.index.VectorSimilarityFunction;
 import org.apache.lucene.internal.hppc.IntObjectHashMap;
 import org.apache.lucene.search.AcceptDocs;
 import org.apache.lucene.search.KnnCollector;
+import org.apache.lucene.search.TotalHits;
 import org.apache.lucene.store.ChecksumIndexInput;
 import org.apache.lucene.store.DataAccessHint;
 import org.apache.lucene.store.DataInput;
@@ -367,12 +368,38 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
     boolean doHnsw = knnCollector.k() < numVectors;
     // The approximate number of vectors that would be visited if we did not filter
     int unfilteredVisit = HnswGraphSearcher.expectedVisitedNodes(knnCollector.k(), graphSize);
-    if (unfilteredVisit >= filteredDocCount || graphSize == 0) {
+    if (graphSize == 0) {
       doHnsw = false;
     }
     if (doHnsw) {
       HnswGraphSearcher.search(
           scorer, collector, getGraph(fieldEntry), acceptedOrds, filteredDocCount);
+
+
+        int k = collector.k();
+        int fullScanCost = filteredDocCount;
+        int hnswCost = unfilteredVisit;
+        int n = numVectors;
+        boolean overLimit = knnCollector.visitedCount() >= knnCollector.visitLimit();
+
+
+        if (fullScanCost > k) {
+          // "TEST: | GrapSize | numCandidates | actualCost | exactCost | relation | num_segments | true_cost | M | label"
+          int segmentCount = -1;
+          var relation = overLimit ? TotalHits.Relation.GREATER_THAN_OR_EQUAL_TO : TotalHits.Relation.EQUAL_TO;
+          long trueCost = knnCollector.visitedCount();
+          System.out.printf(
+              "TEST:\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+              n,
+              k,
+              hnswCost,
+              filteredDocCount,
+              relation,
+              segmentCount,
+              trueCost ,
+              fieldEntry.M,
+              relation == TotalHits.Relation.GREATER_THAN_OR_EQUAL_TO || trueCost >= fullScanCost);
+        }
     } else {
       // if k is larger than the number of vectors we expect to visit in an HNSW search,
       // we can just iterate over all vectors and collect them.

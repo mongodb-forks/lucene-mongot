@@ -104,7 +104,7 @@ public class KnnByteVectorQuery extends AbstractKnnVectorQuery {
       KnnCollectorManager knnCollectorManager)
       throws IOException {
     KnnCollector knnCollector =
-        knnCollectorManager.newCollector(visitedLimit, searchStrategy, context);
+        knnCollectorManager.newCollector(visitedLimit * 16, searchStrategy, context);
     LeafReader reader = context.reader();
     ByteVectorValues byteVectorValues = reader.getByteVectorValues(field);
     if (byteVectorValues == null) {

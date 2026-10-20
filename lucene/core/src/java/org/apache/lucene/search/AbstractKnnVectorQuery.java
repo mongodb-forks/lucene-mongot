@@ -136,8 +136,7 @@ abstract class AbstractKnnVectorQuery extends Query {
         if (perLeaf.scoreDocs.length > 0
             && perLeaf.scoreDocs[perLeaf.scoreDocs.length - 1].score >= minTopKScore) {
           // All this leaf's hits are at or above the global topK min score; explore it further
-          ++reentryCount;
-          tasks.add(() -> searchLeaf(ctx, filterWeight, knnCollectorManagerPhase2));
+          ctxIter.remove();
         } else {
           // This leaf is tapped out; discard the context from the active list so we maintain
           // correspondence between tasks and leaves
