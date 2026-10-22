@@ -310,11 +310,10 @@ public class TestKnnFloatVectorQuery extends BaseKnnVectorQueryTestCase {
       ScoreDoc[] scoreDocs = new ScoreDoc[(int) results];
       System.arraycopy(topDocs.scoreDocs, 0, scoreDocs, 0, scoreDocs.length);
 
-      // a deliberately truncated result is an incomplete approximate search, whatever the format
-      // did, so the query must fall back to exact search
       return new KnnResult(
-          KnnResult.Strategy.APPROXIMATE,
-          new TopDocs(new TotalHits(results, TotalHits.Relation.EQUAL_TO), scoreDocs));
+          KnnResult.Method.APPROXIMATE,
+          new TopDocs(new TotalHits(results, TotalHits.Relation.EQUAL_TO), scoreDocs),
+          scoreDocs.length);
     }
   }
 }

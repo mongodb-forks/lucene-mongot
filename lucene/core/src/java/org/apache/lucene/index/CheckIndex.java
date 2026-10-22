@@ -2933,7 +2933,7 @@ public final class CheckIndex implements Closeable {
     while (count < values.size()) {
       // search the first maxNumSearches vectors to exercise the graph
       if (supportsSearch && values.ordToDoc(count) % everyNdoc == 0) {
-        KnnCollector collector = new TopKnnCollector(10, 10, Integer.MAX_VALUE);
+        KnnCollector collector = new TopKnnCollector(10, Integer.MAX_VALUE);
         codecReader
             .getVectorReader()
             .search(

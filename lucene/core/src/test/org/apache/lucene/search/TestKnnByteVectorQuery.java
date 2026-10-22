@@ -162,8 +162,8 @@ public class TestKnnByteVectorQuery extends BaseKnnVectorQueryTestCase {
       // a deliberately truncated result is an incomplete approximate search, whatever the format
       // did, so the query must fall back to exact search
       return new KnnResult(
-          KnnResult.Strategy.APPROXIMATE,
-          new TopDocs(new TotalHits(results, TotalHits.Relation.EQUAL_TO), scoreDocs));
+          new TopDocs(new TotalHits(results, TotalHits.Relation.EQUAL_TO), scoreDocs),
+          scoreDocs.length);
     }
   }
 }

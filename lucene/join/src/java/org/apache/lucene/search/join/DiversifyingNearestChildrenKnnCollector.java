@@ -108,7 +108,7 @@ class DiversifyingNearestChildrenKnnCollector extends AbstractKnnCollector {
             ? TotalHits.Relation.GREATER_THAN_OR_EQUAL_TO
             : TotalHits.Relation.EQUAL_TO;
     return new KnnResult(
-        super.strategy, new TopDocs(new TotalHits(visitedCount(), relation), scoreDocs));
+        strategy, new TopDocs(new TotalHits(visitedCount(), relation), scoreDocs), k());
   }
 
   @Override

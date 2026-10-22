@@ -132,7 +132,7 @@ abstract class AbstractKnnVectorQuery extends Query {
       while (ctxIter.hasNext()) {
         LeafReaderContext ctx = ctxIter.next();
         KnnResult perLeaf = perLeafResults.get(ctx.ord);
-        if (perLeaf.hasMoreCompetitiveScores(perLeafTopKCalculation(ctx, k), minTopKScore)) {
+        if (perLeaf.hasMoreCompetitiveScores(k, minTopKScore)) {
           // All this leaf's hits are at or above the global topK min score; explore it further
           tasks.add(() -> searchLeaf(ctx, filterWeight, knnCollectorManagerPhase2));
         } else {
@@ -217,7 +217,7 @@ abstract class AbstractKnnVectorQuery extends Query {
     // We pass cost + 1 here to account for the edge case when we explore exactly cost vectors
     KnnResult knnResult =
         approximateSearch(ctx, acceptDocs, cost + 1, timeLimitingKnnCollectorManager);
-    if (knnResult.strategy() == KnnResult.Strategy.EXACT) {
+    if (knnResult.strategy() == KnnResult.Method.EXACT) {
       return knnResult;
     }
 
@@ -279,17 +279,6 @@ abstract class AbstractKnnVectorQuery extends Query {
     return (int)
         Math.max(
             1, k * leafProportion + LAMBDA * Math.sqrt(k * leafProportion * (1 - leafProportion)));
-  }
-
-  private static int perLeafTopKCalculation(LeafReaderContext ctx, int k) {
-    // ctx.parent could be null if this is a MemoryIndex
-    if (ctx.parent != null) {
-      float leafProportion = ctx.reader().maxDoc() / (float) ctx.parent.reader().maxDoc();
-      return perLeafTopKCalculation(k, leafProportion);
-      // We don't have a good way to estimate perLeafTopK here, so just do approximate search
-    } else {
-      return k;
-    }
   }
 
   protected abstract KnnResult approximateSearch(
@@ -356,7 +345,8 @@ abstract class AbstractKnnVectorQuery extends Query {
     }
 
     TotalHits totalHits = new TotalHits(acceptIterator.cost(), relation);
-    return new KnnResult(KnnResult.Strategy.EXACT, new TopDocs(totalHits, topScoreDocs));
+    return new KnnResult(
+        KnnResult.Method.EXACT, new TopDocs(totalHits, topScoreDocs), topScoreDocs.length);
   }
 
   /**
@@ -393,9 +383,7 @@ abstract class AbstractKnnVectorQuery extends Query {
         throws IOException {
       KnnCollector delegateCollector =
           knnCollectorManager.newCollector(visitLimit, searchStrategy, ctx);
-      // Seed only from the strong results: they bound where the first pass stopped exploring, while
-      // the extra retained hits would only add seed entry points without improving the search
-      TopDocs seedTopDocs = perLeafResults.get(ctx.ord).strongTopDocs();
+      TopDocs seedTopDocs = perLeafResults.get(ctx.ord).topDocs();
       VectorScorer scorer = createVectorScorer(ctx, ctx.reader().getFieldInfos().fieldInfo(field));
       if (seedTopDocs.totalHits.value() == 0 || scorer == null) {
         // shouldn't happen - we only come here when there are results

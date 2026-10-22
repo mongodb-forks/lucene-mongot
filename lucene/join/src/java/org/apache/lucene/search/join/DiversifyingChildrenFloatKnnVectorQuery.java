@@ -152,7 +152,8 @@ public class DiversifyingChildrenFloatKnnVectorQuery extends KnnFloatVectorQuery
     }
 
     TotalHits totalHits = new TotalHits(acceptIterator.cost(), relation);
-    return new KnnResult(KnnResult.Strategy.EXACT, new TopDocs(totalHits, topScoreDocs));
+    return new KnnResult(
+        KnnResult.Method.EXACT, new TopDocs(totalHits, topScoreDocs), topScoreDocs.length);
   }
 
   @Override

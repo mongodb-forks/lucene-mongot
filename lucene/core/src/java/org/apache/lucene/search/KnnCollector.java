@@ -107,7 +107,9 @@ public interface KnnCollector {
    */
   KnnSearchStrategy getSearchStrategy();
 
-  void setStrategy(KnnResult.Strategy strategy);
+  void setMethodology(KnnResult.Method strategy);
+
+  KnnResult.Method getMethodology();
 
   /**
    * KnnCollector.Decorator is the base class for decorators of KnnCollector objects, which extend
@@ -158,11 +160,6 @@ public interface KnnCollector {
     }
 
     @Override
-    public float minCollectableSimilarity() {
-      return collector.minCollectableSimilarity();
-    }
-
-    @Override
     public KnnResult topDocs() {
       return collector.topDocs();
     }
@@ -173,8 +170,13 @@ public interface KnnCollector {
     }
 
     @Override
-    public void setStrategy(KnnResult.Strategy strategy) {
-      collector.setStrategy(strategy);
+    public void setMethodology(KnnResult.Method strategy) {
+      collector.setMethodology(strategy);
+    }
+
+    @Override
+    public KnnResult.Method getMethodology() {
+      return collector.getMethodology();
     }
   }
 }

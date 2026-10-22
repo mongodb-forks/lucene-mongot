@@ -74,7 +74,7 @@ public class HnswQueueSaturationCollector extends KnnCollector.Decorator {
           new TotalHits(delegateDocs.totalHits.value(), TotalHits.Relation.EQUAL_TO);
       topDocs =
           new KnnResult(
-              delegateResult.strategy(),
+              getMethodology(),
               new TopDocs(totalHits, delegateDocs.scoreDocs),
               delegateResult.strongResultCount());
     } else {

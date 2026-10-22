@@ -75,7 +75,7 @@ class VectorSimilarityCollector extends AbstractKnnCollector {
             : TotalHits.Relation.EQUAL_TO;
     TopDocs td =
         new TopDocs(new TotalHits(visitedCount(), relation), scoreDocList.toArray(ScoreDoc[]::new));
-    return new KnnResult(strategy, td);
+    return new KnnResult(strategy, td, td.scoreDocs.length);
   }
 
   @Override

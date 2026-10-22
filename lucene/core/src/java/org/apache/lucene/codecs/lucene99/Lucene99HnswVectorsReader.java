@@ -354,7 +354,7 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
 
     int graphSize = (fieldEntry.vectorIndexLength() == 0) ? 0 : numVectors;
     if (graphSize == 0 || k >= numVectors) {
-      docIdCollector.setStrategy(KnnResult.Strategy.EXACT);
+      docIdCollector.setMethodology(KnnResult.Method.EXACT);
       scanAllDocs(docIdCollector, acceptDocs, sequentialScorerSupplier, scorerSupplier, numVectors);
       return;
     }
@@ -380,11 +380,9 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
       if (strat == null) {
         strat = KnnSearchStrategy.Hnsw.DEFAULT;
       }
-      double filterPenalty = strat.getFilteredSearchPenality(selectivity);
-      int unfilteredVisit =
-          (int)
-              (filterPenalty * HnswGraphSearcher.expectedVisitedNodes(k, graphSize, fieldEntry.M));
-      if (unfilteredVisit >= filteredDocCount) {
+      double hnswCost =
+          strat.expectedVisitedNodes(docIdCollector.k(), graphSize, selectivity, fieldEntry.M);
+      if (hnswCost >= filteredDocCount) {
         doHnsw = false;
       }
     }
@@ -392,7 +390,7 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
       HnswGraphSearcher.search(
           scorer, ordCollector, getGraph(fieldEntry), acceptedOrds, filteredDocCount);
     } else {
-      docIdCollector.setStrategy(KnnResult.Strategy.EXACT);
+      docIdCollector.setMethodology(KnnResult.Method.EXACT);
       // if k is larger than the number of vectors we expect to visit in an HNSW search,
       // we can just iterate over all vectors and collect them.
       scanAllDocs(docIdCollector, acceptDocs, sequentialScorerSupplier, scorerSupplier, numVectors);
@@ -422,6 +420,7 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
       int numVectors)
       throws IOException {
     Bits bits = acceptDocs.bits();
+    docIdCollector.setMethodology(KnnResult.Method.EXACT);
     if (bits == null || acceptDocs.cost() >= numVectors) {
       // Case 1: No explicit filter and no deleted documents, so let's just iterate over vector ords
       // Case 2: acceptDocs doesn't account for FieldExistsQuery, so it's probably just livedocs,

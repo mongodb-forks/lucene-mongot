@@ -39,9 +39,8 @@ public class TopKnnCollector extends AbstractKnnCollector {
     this(k, k, visitLimit, null);
   }
 
-  /** Constructor, with default search strategy */
-  public TopKnnCollector(int k, int globalK, int visitLimit) {
-    this(k, globalK, visitLimit, null);
+  public TopKnnCollector(int k, int visitLimit, KnnSearchStrategy searchStrategy) {
+    this(k, k, visitLimit, searchStrategy);
   }
 
   /**
@@ -74,32 +73,38 @@ public class TopKnnCollector extends AbstractKnnCollector {
 
   @Override
   public float minCompetitiveSimilarity() {
-    NeighborQueue q = strongQueue == null ? queue : strongQueue;
-    return q.size() >= k() ? q.topScore() : Float.NEGATIVE_INFINITY;
+    return strongQueue.size() >= k() ? strongQueue.topScore() : Float.NEGATIVE_INFINITY;
   }
 
   @Override
   public float minCollectableSimilarity() {
-    return queue.size() >= globalK ? queue.topScore() : Float.NEGATIVE_INFINITY;
+    var q = queue == null ? strongQueue : queue;
+    return q.size() >= globalK - k() ? q.topScore() : Float.NEGATIVE_INFINITY;
   }
 
   @Override
   public KnnResult topDocs() {
-    assert queue.size() <= this.globalK
+    assert strongQueue.size() <= this.globalK
         : "Tried to collect more results than the maximum number allowed";
-    ScoreDoc[] scoreDocs = new ScoreDoc[queue.size()];
-    for (int i = 1; i <= scoreDocs.length; i++) {
+    ScoreDoc[] scoreDocs = new ScoreDoc[strongQueue.size() + (queue == null ? 0 : queue.size())];
+    int strongResults = strategy == KnnResult.Method.EXACT ? globalK : strongQueue.size();
+
+    int i = 1;
+    for (; strongQueue.size() > 0; i++) {
+      scoreDocs[scoreDocs.length - i] = new ScoreDoc(strongQueue.topNode(), strongQueue.topScore());
+      strongQueue.pop();
+    }
+    for (; queue != null && queue.size() > 0; i++) {
       scoreDocs[scoreDocs.length - i] = new ScoreDoc(queue.topNode(), queue.topScore());
-      queue.pop();
+      strongQueue.pop();
     }
     TotalHits.Relation relation =
         earlyTerminated()
             ? TotalHits.Relation.GREATER_THAN_OR_EQUAL_TO
             : TotalHits.Relation.EQUAL_TO;
+
     return new KnnResult(
-        strategy,
-        new TopDocs(new TotalHits(visitedCount(), relation), scoreDocs),
-        Math.min(k(), scoreDocs.length));
+        strategy, new TopDocs(new TotalHits(visitedCount(), relation), scoreDocs), strongResults);
   }
 
   @Override

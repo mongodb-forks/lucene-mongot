@@ -720,6 +720,11 @@ public class HnswGraphBuilder implements HnswBuilder {
     }
 
     @Override
-    public void setStrategy(KnnResult.Strategy strategy) {}
+    public void setMethodology(KnnResult.Method strategy) {}
+
+    @Override
+    public KnnResult.Method getMethodology() {
+      return KnnResult.Method.APPROXIMATE;
+    }
   }
 }

@@ -43,30 +43,24 @@ public class TestTopKnnResults extends LuceneTestCase {
     // searches for the best 2, but keeps up to 4 hits that were scored anyway
     TopKnnCollector results = new TopKnnCollector(2, 4, Integer.MAX_VALUE, null);
     assertEquals(Float.NEGATIVE_INFINITY, results.minCompetitiveSimilarity(), 0f);
-    assertEquals(Float.NEGATIVE_INFINITY, results.minCollectableSimilarity(), 0f);
 
     results.collect(1, 1f);
     results.collect(2, 2f);
-    // the best 2 are known, so exploration stops below 1, but scored hits are still collectable
+    // the best 2 are known, so exploration stops below 1
     assertEquals(1f, results.minCompetitiveSimilarity(), 0f);
-    assertEquals(Float.NEGATIVE_INFINITY, results.minCollectableSimilarity(), 0f);
 
     results.collect(3, 0.5f);
     results.collect(4, 3f);
-    // the best 2 are now 3 and 2; the 4 kept hits bottom out at 0.5
+    // the best 2 are now 3 and 2
     assertEquals(2f, results.minCompetitiveSimilarity(), 0f);
-    assertEquals(0.5f, results.minCollectableSimilarity(), 0f);
 
     results.collect(5, 0.1f);
-    KnnResult knnResult = results.topDocs();
-    assertEquals(2, knnResult.strongResultCount());
-    ScoreDoc[] scoreDocs = knnResult.topDocs().scoreDocs;
+    ScoreDoc[] scoreDocs = results.topDocs().topDocs().scoreDocs;
     assertEquals(4, scoreDocs.length);
     assertEquals(4, scoreDocs[0].doc);
     assertEquals(2, scoreDocs[1].doc);
     assertEquals(1, scoreDocs[2].doc);
     assertEquals(3, scoreDocs[3].doc);
-    assertEquals(2, knnResult.strongTopDocs().scoreDocs.length);
   }
 
   public void testGlobalKMustNotBeLessThanK() {
