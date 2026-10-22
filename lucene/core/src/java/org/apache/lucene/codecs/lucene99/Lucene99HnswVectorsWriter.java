@@ -46,7 +46,6 @@ import org.apache.lucene.index.SegmentWriteState;
 import org.apache.lucene.index.Sorter;
 import org.apache.lucene.index.VectorSimilarityFunction;
 import org.apache.lucene.search.TaskExecutor;
-import org.apache.lucene.search.knn.KnnSearchStrategy;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.InfoStream;
@@ -626,8 +625,7 @@ public final class Lucene99HnswVectorsWriter extends KnnVectorsWriter {
     if (k <= 0) {
       return true;
     }
-    int expectedVisitedNodes =
-        KnnSearchStrategy.Hnsw.DEFAULT.expectedVisitedNodes(k, numNodes, 1f, 16);
+    int expectedVisitedNodes = (int) (k * Math.log1p(numNodes));
     return numNodes > expectedVisitedNodes && expectedVisitedNodes > 0;
   }
 
