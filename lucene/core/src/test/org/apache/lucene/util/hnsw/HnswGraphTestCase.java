@@ -68,6 +68,7 @@ import org.apache.lucene.search.AbstractKnnCollector;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.KnnCollector;
+import org.apache.lucene.search.KnnResult;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.Sort;
@@ -528,7 +529,7 @@ abstract class HnswGraphTestCase<T> extends LuceneTestCase {
     KnnCollector nn =
         HnswGraphSearcher.search(
             buildScorer(vectors, getTargetVector()), 10, hnsw, null, Integer.MAX_VALUE);
-    TopDocs topDocs = nn.topDocs();
+    TopDocs topDocs = nn.topDocs().topDocs();
     assertEquals("Number of found results is not equal to [10].", 10, topDocs.scoreDocs.length);
     int sum = 0;
     for (ScoreDoc node : topDocs.scoreDocs) {
@@ -561,7 +562,7 @@ abstract class HnswGraphTestCase<T> extends LuceneTestCase {
     KnnCollector nn =
         HnswGraphSearcher.search(
             buildScorer(vectors, getTargetVector()), 10, hnsw, acceptOrds, Integer.MAX_VALUE);
-    TopDocs nodes = nn.topDocs();
+    TopDocs nodes = nn.topDocs().topDocs();
     assertEquals("Number of found results is not equal to [10].", 10, nodes.scoreDocs.length);
     int sum = 0;
     for (ScoreDoc node : nodes.scoreDocs) {
@@ -596,7 +597,7 @@ abstract class HnswGraphTestCase<T> extends LuceneTestCase {
             hnsw,
             acceptOrds,
             Integer.MAX_VALUE);
-    TopDocs nodes = nn.topDocs();
+    TopDocs nodes = nn.topDocs().topDocs();
     assertEquals(numAccepted, nodes.scoreDocs.length);
     for (ScoreDoc node : nodes.scoreDocs) {
       assertTrue("the results include a deleted document: " + node, acceptOrds.get(node.doc));
@@ -849,7 +850,7 @@ abstract class HnswGraphTestCase<T> extends LuceneTestCase {
           }
 
           @Override
-          public TopDocs topDocs() {
+          public KnnResult topDocs() {
             return null;
           }
         };
@@ -1033,7 +1034,7 @@ abstract class HnswGraphTestCase<T> extends LuceneTestCase {
       actual =
           HnswGraphSearcher.search(
               buildScorer(vectors, query), 100, hnsw, acceptOrds, Integer.MAX_VALUE);
-      TopDocs topDocs = actual.topDocs();
+      TopDocs topDocs = actual.topDocs().topDocs();
       NeighborQueue expected = new NeighborQueue(topK, false);
       for (int j = 0; j < size; j++) {
         if (vectorValue(vectors, j) != null && (acceptOrds == null || acceptOrds.get(j))) {
@@ -1108,8 +1109,8 @@ abstract class HnswGraphTestCase<T> extends LuceneTestCase {
     }
     exec.shutdownNow();
     for (int i = 0; i < expects.size(); i++) {
-      TopDocs expect = expects.get(i).topDocs();
-      TopDocs actual = actuals.get(i).topDocs();
+      TopDocs expect = expects.get(i).topDocs().topDocs();
+      TopDocs actual = actuals.get(i).topDocs().topDocs();
       int[] expectedDocs = new int[expect.scoreDocs.length];
       for (int j = 0; j < expect.scoreDocs.length; j++) {
         expectedDocs[j] = expect.scoreDocs[j].doc;

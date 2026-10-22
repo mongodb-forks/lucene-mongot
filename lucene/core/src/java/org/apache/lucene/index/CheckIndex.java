@@ -2889,7 +2889,7 @@ public final class CheckIndex implements Closeable {
                   values.vectorValue(count),
                   collector,
                   AcceptDocs.fromLiveDocs(null, codecReader.maxDoc()));
-          TopDocs docs = collector.topDocs();
+          TopDocs docs = collector.topDocs().topDocs();
           if (docs.scoreDocs.length == 0) {
             throw new CheckIndexException(
                 "Field \"" + fieldInfo.name + "\" failed to search k nearest neighbors");
@@ -2941,7 +2941,7 @@ public final class CheckIndex implements Closeable {
                 values.vectorValue(count),
                 collector,
                 AcceptDocs.fromLiveDocs(null, codecReader.maxDoc()));
-        TopDocs docs = collector.topDocs();
+        TopDocs docs = collector.topDocs().topDocs();
         if (docs.scoreDocs.length == 0) {
           throw new CheckIndexException(
               "Field \"" + fieldInfo.name + "\" failed to search k nearest neighbors");
