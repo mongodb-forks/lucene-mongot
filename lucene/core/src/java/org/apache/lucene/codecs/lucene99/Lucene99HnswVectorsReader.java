@@ -377,13 +377,9 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
       if (strat == null) {
         strat = KnnSearchStrategy.Hnsw.DEFAULT;
       }
-      double filterPenalty = strat.getFilteredSearchPenality(selectivity);
-      int unfilteredVisit =
-          (int)
-              (filterPenalty
-                  * HnswGraphSearcher.expectedVisitedNodes(
-                      knnCollector.k(), graphSize, fieldEntry.M));
-      if (unfilteredVisit >= filteredDocCount) {
+      double hnswCost =
+          strat.expectedVisitedNodes(knnCollector.k(), graphSize, selectivity, fieldEntry.M);
+      if (hnswCost >= filteredDocCount) {
         doHnsw = false;
       }
     }

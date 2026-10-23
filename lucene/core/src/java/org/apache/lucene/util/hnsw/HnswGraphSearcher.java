@@ -46,51 +46,15 @@ public class HnswGraphSearcher extends AbstractHnswGraphSearcher {
   protected float[] bulkScores = null;
 
   /**
-   * HNSW search is roughly logarithmic. This doesn't take maxConn into account, but it is a pretty
-   * good approximation.
-   *
-   * @param k neighbors to find
-   * @param graphSize size of the graph
-   * @return expected number of visited nodes
-   */
-  public static int expectedVisitedNodes(int k, int graphSize) {
-    return (int) (Math.log(graphSize) * k);
-  }
-
-  /**
-   * Estimates the number of distinct nodes a search visits, accounting for maxConn and bounded by
-   * the graph size. Used to decide between an HNSW search and an exhaustive scan.
-   *
-   * @param k neighbors to find
-   * @param graphSize size of the graph
-   * @param m maxConn used to build the graph
-   * @return expected number of distinct visited nodes, in [0, graphSize]
-   */
-  public static int expectedVisitedNodes(int k, int graphSize, int m) {
-    return squash(graphSize, 1.0 / 16 * m / Math.log1p(m) * Math.log(graphSize) * k);
-  }
-
-  /**
-   * Expected number of distinct values hit by {@code draws} uniform draws from {@code max} values,
-   * i.e. {@code max * (1 - (1 - 1/max)^draws)}. Maps [0, inf) to [0, max] and is monotonic in both.
-   */
-  private static int squash(int max, double draws) {
-    if (max <= 1) {
-      return draws > 0 ? max : 0;
-    }
-    return (int) (max * -Math.expm1(draws * Math.log1p(-1.0 / max)));
-  }
-
-  /**
    * Follows similar logic to {@link FixedBitSet#of(DocIdSetIterator, int)} to determine the best
    * bit set given the expected number of visited nodes vs total graph size.
    *
-   * @param k neighbors to find
+   * @param expectedVisitedCount the expected number of visited nodes
    * @param graphSize size of the graph
    * @return a bit set appropriate for the expected number of visited nodes
    */
-  static BitSet createBitSet(int k, int graphSize) {
-    return expectedVisitedNodes(k, graphSize) < (graphSize >>> 7)
+  static BitSet createBitSet(int expectedVisitedCount, int graphSize) {
+    return expectedVisitedCount < (graphSize >>> 7)
         ? new SparseFixedBitSet(graphSize)
         : new FixedBitSet(graphSize);
   }
@@ -168,12 +132,16 @@ public class HnswGraphSearcher extends AbstractHnswGraphSearcher {
       innerSearcher =
           FilteredHnswGraphSearcher.create(knnCollector.k(), graph, filteredDocCount, acceptOrds);
     } else {
+      int n = getGraphSize(graph);
+      int m = graph.maxConn();
+      int expectedVisit =
+          hnswStrategy.expectedVisitedNodes(
+              knnCollector.k(), n, (float) (filteredDocCount / (double) n), m);
       innerSearcher =
           new HnswGraphSearcher(
-              new NeighborQueue(knnCollector.k(), true),
-              createBitSet(knnCollector.k(), getGraphSize(graph)));
+              new NeighborQueue(knnCollector.k(), true), createBitSet(expectedVisit, n));
     }
-    // Then, check if we the search strategy is seeded
+    // Then, check if the search strategy is seeded
     final AbstractHnswGraphSearcher graphSearcher;
     if (knnCollector.getSearchStrategy() instanceof KnnSearchStrategy.Seeded seeded
         && seeded.numberOfEntryPoints() > 0) {

@@ -23,7 +23,6 @@ import static org.apache.lucene.codecs.lucene99.Lucene99HnswVectorsFormat.HNSW_G
 import static org.apache.lucene.codecs.lucene99.Lucene99HnswVectorsFormat.VERSION_CURRENT;
 import static org.apache.lucene.codecs.lucene99.Lucene99HnswVectorsFormat.VERSION_GROUPVARINT;
 import static org.apache.lucene.codecs.lucene99.Lucene99HnswVectorsReader.SIMILARITY_FUNCTIONS;
-import static org.apache.lucene.util.hnsw.HnswGraphSearcher.expectedVisitedNodes;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -716,7 +715,8 @@ public final class Lucene99HnswVectorsWriter extends KnnVectorsWriter {
     if (k <= 0) {
       return true;
     }
-    int expectedVisitedNodes = expectedVisitedNodes(k, numNodes);
+    // This model only needs to be accurate for small numNodes
+    int expectedVisitedNodes = (int) (k * Math.log(numNodes));
     return numNodes > expectedVisitedNodes && expectedVisitedNodes > 0;
   }
 

@@ -123,10 +123,9 @@ public final class Lucene99HnswVectorsFormat extends KnnVectorsFormat {
    * Minimum estimated search effort (in terms of expected visited nodes) required before building
    * an HNSW graph for a segment.
    *
-   * <p>This threshold is compared against the value produced by {@link
-   * org.apache.lucene.util.hnsw.HnswGraphSearcher#expectedVisitedNodes(int, int)}, which estimates
-   * how many nodes would be visited during a vector search based on the current graph size and
-   * {@code k} (neighbours to find).
+   * <p>This threshold is compared against {@code k * ln(numNodes)}, a conservative estimate of how
+   * many nodes would be visited during a vector search based on the current graph size and {@code
+   * k} (neighbours to find).
    *
    * <p>If the estimated number of visited nodes falls below this threshold, HNSW graph construction
    * is skipped for that segment - typically for small flushes or low document count segments -
