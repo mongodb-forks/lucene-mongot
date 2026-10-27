@@ -107,7 +107,7 @@ public interface KnnCollector {
    */
   KnnSearchStrategy getSearchStrategy();
 
-  void setMethodology(KnnResult.Method strategy);
+  void setMethodology(KnnResult.Method method);
 
   KnnResult.Method getMethodology();
 
@@ -157,6 +157,11 @@ public interface KnnCollector {
     @Override
     public float minCompetitiveSimilarity() {
       return collector.minCompetitiveSimilarity();
+    }
+
+    @Override
+    public float minCollectableSimilarity() {
+      return collector.minCollectableSimilarity();
     }
 
     @Override

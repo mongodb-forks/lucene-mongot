@@ -89,7 +89,7 @@ public abstract class KnnSearchStrategy {
      *
      * <p>This function is smooth and monotonic in x.
      */
-    static double squash(double x, int limit) {
+    private static double squash(double x, int limit) {
       if (limit == 0) {
         return 0;
       }
