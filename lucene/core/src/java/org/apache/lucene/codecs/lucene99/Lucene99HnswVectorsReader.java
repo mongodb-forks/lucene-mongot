@@ -362,36 +362,23 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
     // Use approximate cardinality as this is good enough, but ensure we don't exceed the graph
     // size as that is illogical
     int filteredDocCount = Math.min(acceptDocs.cost(), graphSize);
-    // The approximate number of vectors that would be visited if we did not filter
     final RandomVectorScorer scorer = scorerSupplier.get();
     final KnnCollector ordCollector =
         new OrdinalTranslatedKnnCollector(docIdCollector, scorer::ordToDoc);
     final Bits acceptedOrds = scorer.getAcceptOrds(acceptDocs.bits());
 
-    // The approximate number of vectors that would be visited if we did not filter
-    boolean doHnsw = true;
-    if (filteredDocCount == 0) {
-      // nothing passes the filter: the exhaustive scan is trivially cheaper
-      doHnsw = false;
-    } else {
-      float selectivity = (float) (filteredDocCount / (double) graphSize);
-      KnnSearchStrategy strat = docIdCollector.getSearchStrategy();
-      if (strat == null) {
-        strat = KnnSearchStrategy.Hnsw.DEFAULT;
-      }
-      double hnswCost =
-          strat.expectedVisitedNodes(docIdCollector.k(), graphSize, selectivity, fieldEntry.M);
-      if (hnswCost >= filteredDocCount) {
-        doHnsw = false;
-      }
+    float selectivity = (float) (filteredDocCount / (double) graphSize);
+    KnnSearchStrategy strat = docIdCollector.getSearchStrategy();
+    if (strat == null) {
+      strat = KnnSearchStrategy.Hnsw.DEFAULT;
     }
-    if (doHnsw) {
+    double expectedHnswCost =
+        strat.expectedVisitedNodes(docIdCollector.k(), graphSize, selectivity, fieldEntry.M);
+    if (expectedHnswCost >= filteredDocCount) {
+      scanAllDocs(docIdCollector, acceptDocs, sequentialScorerSupplier, scorerSupplier, numVectors);
+    } else {
       HnswGraphSearcher.search(
           scorer, ordCollector, getGraph(fieldEntry), acceptedOrds, filteredDocCount);
-    } else {
-      // if k is larger than the number of vectors we expect to visit in an HNSW search,
-      // we can just iterate over all vectors and collect them.
-      scanAllDocs(docIdCollector, acceptDocs, sequentialScorerSupplier, scorerSupplier, numVectors);
     }
   }
 
@@ -438,6 +425,7 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
         buffer.size > 0;
         maxScore = bulkScorer.nextDocsAndScores(DocIdSetIterator.NO_MORE_DOCS, null, buffer)) {
 
+      // Collect any results that are globally competitive since we have to score them anyway.
       if (maxScore >= docIdCollector.minCollectableSimilarity()) {
         for (int i = 0; i < buffer.size; ++i) {
           float score = buffer.features[i];

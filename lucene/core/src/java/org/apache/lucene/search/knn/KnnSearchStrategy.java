@@ -27,7 +27,7 @@ import org.apache.lucene.search.HnswQueueSaturationCollector;
  * @lucene.experimental
  */
 public abstract class KnnSearchStrategy {
-  public static final int DEFAULT_FILTERED_SEARCH_THRESHOLD = 60;
+  public static final int DEFAULT_FILTERED_SEARCH_THRESHOLD = 0;
 
   /** Override and implement search strategy instance equivalence properly in a subclass. */
   @Override
@@ -45,8 +45,9 @@ public abstract class KnnSearchStrategy {
   public abstract void nextVectorsBlock();
 
   /**
-   * Estimates the number of distinct nodes a search visits, accounting for maxConn and bounded by
-   * the graph size. Used to decide between an HNSW search and an exhaustive scan.
+   * Estimates the number of distinct nodes this search strategy expects to visit, accounting for
+   * maxConn and bounded by the graph size. Used to decide between an HNSW search and an exhaustive
+   * scan.
    *
    * @param k neighbors to find
    * @param graphSize size of the graph

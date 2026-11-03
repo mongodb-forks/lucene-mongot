@@ -625,7 +625,7 @@ public final class Lucene99HnswVectorsWriter extends KnnVectorsWriter {
     if (k <= 0) {
       return true;
     }
-    int expectedVisitedNodes = (int) (k * Math.log1p(numNodes));
+    int expectedVisitedNodes = (int) (k * Math.log(numNodes));
     return numNodes > expectedVisitedNodes && expectedVisitedNodes > 0;
   }
 
