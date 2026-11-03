@@ -53,7 +53,8 @@ public class TopKnnCollectorManager implements KnnCollectorManager {
       LeafReaderContext context,
       int k,
       int globalK) {
-    return new TopKnnCollector(k, globalK, visitedLimit, searchStrategy);
+    // perLeafTopK (k) can exceed globalK for large leaves, so collect at least k
+    return new TopKnnCollector(k, Math.max(k, globalK), visitedLimit, searchStrategy);
   }
 
   @Override

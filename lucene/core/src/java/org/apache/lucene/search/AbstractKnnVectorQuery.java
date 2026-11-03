@@ -223,7 +223,8 @@ abstract class AbstractKnnVectorQuery extends Query {
     TopDocs results = knnResult.topDocs();
 
     if ((results.totalHits.relation() == TotalHits.Relation.EQUAL_TO
-            // We know that there are more than `perLeafTopK` available docs, if we didn't even get
+            // Since the search was approximate, we know that there are more than `perLeafTopK`
+            // available docs, if we didn't even get
             // `perLeafTopK` something weird happened, and we need to drop to exact search
             && knnResult.strongResultCount() >= perLeafTopK)
         // Return partial results only when timeout is met

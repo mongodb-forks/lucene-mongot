@@ -53,15 +53,6 @@ public record KnnResult(Method strategy, TopDocs topDocs, int strongResultCount)
   }
 
   /**
-   * Returns true if this result was computed by an optimistic search. That is, we wagered that we
-   * could find all the competitive hits from this segment without fully exhausting the search
-   * budget.
-   */
-  public boolean isOptimistic() {
-    return strategy == Method.APPROXIMATE && topDocs.scoreDocs.length > strongResultCount;
-  }
-
-  /**
    * Returns true if this result came from an approximate search that filled its strong results and
    * whose weakest strong result is still competitive with {@code minCompetitiveScore}, meaning that
    * re-searching this segment more deeply could find further competitive hits.
@@ -70,10 +61,14 @@ public record KnnResult(Method strategy, TopDocs topDocs, int strongResultCount)
    * @param minCompetitiveScore the minimum score needed to make the global top hits
    */
   public boolean hasMoreCompetitiveScores(int perLeafK, float minCompetitiveScore) {
-    // A search that collected fewer than perLeafK strong hits explored everything it could reach
+    if (strongResultCount < perLeafK) {
+      // A search that collected fewer than perLeafK strong hits presumably scored everything that
+      // matched.
+      return false;
+    }
+
     return strategy == Method.APPROXIMATE
         && strongResultCount > 0
-        && strongResultCount >= perLeafK
         && topDocs.scoreDocs[strongResultCount - 1].score >= minCompetitiveScore;
   }
 

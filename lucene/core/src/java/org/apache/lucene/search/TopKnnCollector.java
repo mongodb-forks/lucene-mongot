@@ -54,10 +54,6 @@ public class TopKnnCollector extends AbstractKnnCollector {
    */
   public TopKnnCollector(int k, int globalK, int visitLimit, KnnSearchStrategy searchStrategy) {
     super(k, visitLimit, searchStrategy);
-    if (globalK < k) {
-      throw new IllegalArgumentException(
-          "globalK must be >= k, got globalK=" + globalK + " k=" + k);
-    }
     this.globalK = globalK;
     // Heap to store top perLeafK results
     this.strongQueue = new NeighborQueue(k, false);
