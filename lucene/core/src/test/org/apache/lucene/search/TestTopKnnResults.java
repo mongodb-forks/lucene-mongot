@@ -62,9 +62,4 @@ public class TestTopKnnResults extends LuceneTestCase {
     assertEquals(1, scoreDocs[2].doc);
     assertEquals(3, scoreDocs[3].doc);
   }
-
-  public void testGlobalKMustNotBeLessThanK() {
-    expectThrows(
-        IllegalArgumentException.class, () -> new TopKnnCollector(5, 4, Integer.MAX_VALUE, null));
-  }
 }

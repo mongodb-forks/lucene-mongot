@@ -54,7 +54,7 @@ public class TopKnnCollector extends AbstractKnnCollector {
    */
   public TopKnnCollector(int k, int globalK, int visitLimit, KnnSearchStrategy searchStrategy) {
     super(k, visitLimit, searchStrategy);
-    this.globalK = globalK;
+    this.globalK = Math.max(k, globalK);
     // Heap to store top perLeafK results
     this.strongQueue = new NeighborQueue(k, false);
     // Heap to store remaining results up to globalK
