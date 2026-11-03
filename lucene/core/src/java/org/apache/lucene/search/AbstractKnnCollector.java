@@ -76,7 +76,7 @@ public abstract class AbstractKnnCollector implements KnnCollector {
   public abstract float minCompetitiveSimilarity();
 
   @Override
-  public abstract KnnResult topDocs();
+  public abstract KnnResult knnResult();
 
   @Override
   public KnnSearchStrategy getSearchStrategy() {

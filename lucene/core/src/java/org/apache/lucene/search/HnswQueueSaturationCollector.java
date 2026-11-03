@@ -64,11 +64,11 @@ public class HnswQueueSaturationCollector extends KnnCollector.Decorator {
   }
 
   @Override
-  public KnnResult topDocs() {
+  public KnnResult knnResult() {
     KnnResult topDocs;
     if (patienceFinished && delegate.earlyTerminated() == false) {
       // this avoids re-running exact search in the filtered scenario when patience is exhausted
-      KnnResult delegateResult = delegate.topDocs();
+      KnnResult delegateResult = delegate.knnResult();
       TopDocs delegateDocs = delegateResult.topDocs();
       TotalHits totalHits =
           new TotalHits(delegateDocs.totalHits.value(), TotalHits.Relation.EQUAL_TO);
@@ -78,7 +78,7 @@ public class HnswQueueSaturationCollector extends KnnCollector.Decorator {
               new TopDocs(totalHits, delegateDocs.scoreDocs),
               delegateResult.strongResultCount());
     } else {
-      topDocs = delegate.topDocs();
+      topDocs = delegate.knnResult();
     }
     return topDocs;
   }

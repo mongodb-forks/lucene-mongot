@@ -59,8 +59,8 @@ public class TimeLimitingKnnCollectorManager implements KnnCollectorManager {
     }
 
     @Override
-    public KnnResult topDocs() {
-      KnnResult docs = super.topDocs();
+    public KnnResult knnResult() {
+      KnnResult docs = super.knnResult();
 
       // Mark results as partial if timeout is met
       TotalHits.Relation relation =

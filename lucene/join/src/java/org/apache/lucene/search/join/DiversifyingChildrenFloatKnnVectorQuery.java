@@ -175,7 +175,7 @@ public class DiversifyingChildrenFloatKnnVectorQuery extends KnnFloatVectorQuery
       return KnnResult.NO_RESULT;
     }
     context.reader().searchNearestVectors(field, query, collector, acceptDocs);
-    return collector.topDocs();
+    return collector.knnResult();
   }
 
   @Override

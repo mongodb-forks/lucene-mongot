@@ -41,8 +41,8 @@ public final class OrdinalTranslatedKnnCollector extends KnnCollector.Decorator 
   }
 
   @Override
-  public KnnResult topDocs() {
-    KnnResult td = super.topDocs();
+  public KnnResult knnResult() {
+    KnnResult td = super.knnResult();
     var topDocs =
         new TopDocs(
             new TotalHits(

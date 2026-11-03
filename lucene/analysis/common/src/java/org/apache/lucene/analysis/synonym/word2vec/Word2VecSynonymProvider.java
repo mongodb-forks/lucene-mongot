@@ -87,7 +87,7 @@ public class Word2VecSynonymProvider {
               hnswGraph,
               null,
               Integer.MAX_VALUE);
-      TopDocs topDocs = synonyms.topDocs().topDocs();
+      TopDocs topDocs = synonyms.knnResult().topDocs();
 
       for (int i = 0; i < topDocs.scoreDocs.length; i++) {
         float similarity = topDocs.scoreDocs[i].score;

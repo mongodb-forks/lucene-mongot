@@ -114,7 +114,7 @@ public class KnnFloatVectorQuery extends AbstractKnnVectorQuery {
       return KnnResult.NO_RESULT;
     }
     reader.searchNearestVectors(field, target, knnCollector, acceptDocs);
-    KnnResult results = knnCollector.topDocs();
+    KnnResult results = knnCollector.knnResult();
     return results != null ? results : KnnResult.NO_RESULT;
   }
 

@@ -101,7 +101,7 @@ public class TopKnnCollector extends AbstractKnnCollector {
   }
 
   @Override
-  public KnnResult topDocs() {
+  public KnnResult knnResult() {
     assert strongQueue.size() <= this.globalK
         : "Tried to collect more strong results than the maximum number allowed";
     assert queue == null || queue.size() <= this.globalK

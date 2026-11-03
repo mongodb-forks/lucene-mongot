@@ -710,7 +710,7 @@ public class HnswGraphBuilder implements HnswBuilder {
     }
 
     @Override
-    public KnnResult topDocs() {
+    public KnnResult knnResult() {
       throw new IllegalArgumentException();
     }
 

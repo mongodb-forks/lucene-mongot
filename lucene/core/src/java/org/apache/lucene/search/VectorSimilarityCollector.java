@@ -66,7 +66,7 @@ class VectorSimilarityCollector extends AbstractKnnCollector {
   }
 
   @Override
-  public KnnResult topDocs() {
+  public KnnResult knnResult() {
     // Results are not returned in a sorted order to prevent unnecessary calculations (because we do
     // not need to maintain the topK)
     TotalHits.Relation relation =

@@ -100,7 +100,7 @@ public interface KnnCollector {
    *
    * @return The collected top documents
    */
-  KnnResult topDocs();
+  KnnResult knnResult();
 
   /**
    * @return the search strategy used by this collector, can be null
@@ -165,8 +165,8 @@ public interface KnnCollector {
     }
 
     @Override
-    public KnnResult topDocs() {
-      return collector.topDocs();
+    public KnnResult knnResult() {
+      return collector.knnResult();
     }
 
     @Override

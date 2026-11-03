@@ -116,7 +116,7 @@ public class FloatVectorSimilarityQuery extends AbstractVectorSimilarityQuery {
       throws IOException {
     KnnCollector collector = knnCollectorManager.newCollector(visitLimit, null, context);
     context.reader().searchNearestVectors(field, target, collector, acceptDocs);
-    return collector.topDocs().topDocs();
+    return collector.knnResult().topDocs();
   }
 
   @Override

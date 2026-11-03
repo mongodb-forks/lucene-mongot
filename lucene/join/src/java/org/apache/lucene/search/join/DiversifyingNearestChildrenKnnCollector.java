@@ -92,7 +92,7 @@ class DiversifyingNearestChildrenKnnCollector extends AbstractKnnCollector {
   }
 
   @Override
-  public KnnResult topDocs() {
+  public KnnResult knnResult() {
     assert heap.size() <= k() : "Tried to collect more results than the maximum number allowed";
     while (heap.size() > k()) {
       heap.popToDrain();

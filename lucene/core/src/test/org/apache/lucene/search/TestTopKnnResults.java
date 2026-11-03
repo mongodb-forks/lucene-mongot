@@ -28,7 +28,7 @@ public class TestTopKnnResults extends LuceneTestCase {
     for (int i = 0; i < nodes.length; i++) {
       results.collect(nodes[i], scores[i]);
     }
-    TopDocs topDocs = results.topDocs().topDocs();
+    TopDocs topDocs = results.knnResult().topDocs();
     int[] sortedNodes = new int[topDocs.scoreDocs.length];
     float[] sortedScores = new float[topDocs.scoreDocs.length];
     for (int i = 0; i < topDocs.scoreDocs.length; i++) {
@@ -55,7 +55,7 @@ public class TestTopKnnResults extends LuceneTestCase {
     assertEquals(2f, results.minCompetitiveSimilarity(), 0f);
 
     results.collect(5, 0.1f);
-    ScoreDoc[] scoreDocs = results.topDocs().topDocs().scoreDocs;
+    ScoreDoc[] scoreDocs = results.knnResult().topDocs().scoreDocs;
     assertEquals(4, scoreDocs.length);
     assertEquals(4, scoreDocs[0].doc);
     assertEquals(2, scoreDocs[1].doc);

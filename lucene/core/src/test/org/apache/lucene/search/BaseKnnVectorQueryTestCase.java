@@ -926,7 +926,7 @@ abstract class BaseKnnVectorQueryTestCase extends LuceneTestCase {
       assertFalse(noTimeoutCollector.earlyTerminated());
 
       // Check that results are complete
-      TopDocs noTimeoutTopDocs = noTimeoutCollector.topDocs().topDocs();
+      TopDocs noTimeoutTopDocs = noTimeoutCollector.knnResult().topDocs();
       assertEquals(TotalHits.Relation.EQUAL_TO, noTimeoutTopDocs.totalHits.relation());
       assertEquals(1, noTimeoutTopDocs.scoreDocs.length);
 
@@ -942,7 +942,7 @@ abstract class BaseKnnVectorQueryTestCase extends LuceneTestCase {
       assertTrue(timeoutCollector.earlyTerminated());
 
       // Check that partial results are returned
-      TopDocs timeoutTopDocs = timeoutCollector.topDocs().topDocs();
+      TopDocs timeoutTopDocs = timeoutCollector.knnResult().topDocs();
       assertEquals(
           TotalHits.Relation.GREATER_THAN_OR_EQUAL_TO, timeoutTopDocs.totalHits.relation());
       assertEquals(1, timeoutTopDocs.scoreDocs.length);
