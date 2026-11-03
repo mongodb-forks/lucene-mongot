@@ -354,7 +354,6 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
 
     int graphSize = (fieldEntry.vectorIndexLength() == 0) ? 0 : numVectors;
     if (graphSize == 0 || k >= numVectors) {
-      docIdCollector.setMethodology(KnnResult.Method.EXACT);
       scanAllDocs(docIdCollector, acceptDocs, sequentialScorerSupplier, scorerSupplier, numVectors);
       return;
     }
@@ -390,7 +389,6 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
       HnswGraphSearcher.search(
           scorer, ordCollector, getGraph(fieldEntry), acceptedOrds, filteredDocCount);
     } else {
-      docIdCollector.setMethodology(KnnResult.Method.EXACT);
       // if k is larger than the number of vectors we expect to visit in an HNSW search,
       // we can just iterate over all vectors and collect them.
       scanAllDocs(docIdCollector, acceptDocs, sequentialScorerSupplier, scorerSupplier, numVectors);
@@ -419,6 +417,8 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
       IOSupplier<RandomVectorScorer> scorerSupplier,
       int numVectors)
       throws IOException {
+    docIdCollector.setMethodology(KnnResult.Method.EXACT);
+
     Bits bits = acceptDocs.bits();
     docIdCollector.setMethodology(KnnResult.Method.EXACT);
     if (bits == null || acceptDocs.cost() >= numVectors) {
