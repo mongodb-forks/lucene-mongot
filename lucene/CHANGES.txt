@@ -5,6 +5,13 @@ http://s.apache.org/luceneversions
 
 ======================= Lucene-mongot 10.4.0-6 =======================
 
+Optimizations
+---------------------
+* Compute the 128-bit uint8 dot product and square distance kernels without Vector API conversion
+  operators, widening via reinterpret + mask/shift instead. JDK 21 does not intrinsify the unsigned
+  (ZERO_EXTEND_*) conversions well on aarch64, where the 128-bit kernel is the only uint8 path; the
+  replacement uses only lanewise ops that are always intrinsified. (Shawn Yarbrough)
+
 Bug Fixes
 ---------------------
 * GITHUB#16807 (backport): Fix byte vector dot products and square distances staying several

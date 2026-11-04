@@ -434,8 +434,9 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         i += BYTE_SPECIES.loopBound(a.length());
         res += uint8DotProductBody256(a, b, i);
       } else {
-        // tricky: we don't have SPECIES_32, so we workaround with "overlapping read"
-        i += ByteVector.SPECIES_64.loopBound(a.length() - ByteVector.SPECIES_64.length());
+        // no overlapping read needed: the 128-bit body widens without conversions and consumes
+        // the full 16-byte load
+        i += ByteVector.SPECIES_128.loopBound(a.length());
         res += uint8DotProductBody128(a, b, i);
       }
     }
@@ -540,22 +541,29 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     return acc.reduceLanes(ADD);
   }
 
-  /** vectorized unsigned dot product body (128 bit vectors) */
+  /**
+   * Vectorized unsigned dot product body (128 bit vectors).
+   *
+   * <p>Widens via reinterpret + mask/shift instead of the {@code ZERO_EXTEND_*} conversion
+   * operators: JDK 21 does not intrinsify the unsigned conversions well on aarch64, where this is
+   * the only uint8 kernel that runs, and they fall back to slow Java implementations. The lanewise
+   * ops used here are always intrinsified. Reinterpret relies on little-endian lane order; every
+   * supported platform is little-endian. Each int lane holds four bytes, so the four extracts below
+   * cover byte positions k, k+4, k+8, k+12; addition commutes, so summing the position classes in
+   * any order gives the exact dot product.
+   */
   private static int uint8DotProductBody128(ByteVectorLoader a, ByteVectorLoader b, int limit) {
     IntVector acc = IntVector.zero(IntVector.SPECIES_128);
-    // 4 bytes at a time (re-loading half the vector each time!)
-    for (int i = 0; i < limit; i += ByteVector.SPECIES_64.length() >> 1) {
-      // load 8 bytes
-      ByteVector va8 = a.load(ByteVector.SPECIES_64, i);
-      ByteVector vb8 = b.load(ByteVector.SPECIES_64, i);
+    // 16 bytes at a time
+    for (int i = 0; i < limit; i += ByteVector.SPECIES_128.length()) {
+      IntVector va32 = a.load(ByteVector.SPECIES_128, i).reinterpretAsInts();
+      IntVector vb32 = b.load(ByteVector.SPECIES_128, i).reinterpretAsInts();
 
-      // process first "half" only: 16-bit multiply
-      Vector<Short> va16 = va8.convert(ZERO_EXTEND_B2S, 0);
-      Vector<Short> vb16 = vb8.convert(ZERO_EXTEND_B2S, 0);
-      Vector<Short> prod16 = va16.mul(vb16);
-
-      // 32-bit add: the 16-bit product is unsigned
-      acc = acc.add(prod16.convertShape(ZERO_EXTEND_S2I, IntVector.SPECIES_128, 0));
+      acc = acc.add(va32.and(0xFF).mul(vb32.and(0xFF)));
+      acc = acc.add(va32.lanewise(LSHR, 8).and(0xFF).mul(vb32.lanewise(LSHR, 8).and(0xFF)));
+      acc = acc.add(va32.lanewise(LSHR, 16).and(0xFF).mul(vb32.lanewise(LSHR, 16).and(0xFF)));
+      // LSHR is a logical shift, so the top byte of each lane needs no mask
+      acc = acc.add(va32.lanewise(LSHR, 24).mul(vb32.lanewise(LSHR, 24)));
     }
     // reduce
     return acc.reduceLanes(ADD);
@@ -952,7 +960,9 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         i += BYTE_SPECIES.loopBound(a.length());
         res += uint8SquareDistanceBody256(a, b, i);
       } else {
-        i += ByteVector.SPECIES_64.loopBound(a.length());
+        // no overlapping read needed: the 128-bit body widens without conversions and consumes
+        // the full 16-byte load
+        i += ByteVector.SPECIES_128.loopBound(a.length());
         res += uint8SquareDistanceBody128(a, b, i);
       }
     }
@@ -1027,28 +1037,33 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
   }
 
   /** vectorized unsigned square distance body (128 bit vectors) */
+  /**
+   * Vectorized unsigned square distance body (128 bit vectors).
+   *
+   * <p>Widens via reinterpret + mask/shift instead of the {@code ZERO_EXTEND_*} conversion
+   * operators, for the same reason as {@link #uint8DotProductBody128}: JDK 21 does not intrinsify
+   * the unsigned conversions well on aarch64, where this is the only uint8 kernel that runs. The
+   * differences are computed in 32-bit lanes, so no accumulator split is needed.
+   */
   private static int uint8SquareDistanceBody128(ByteVectorLoader a, ByteVectorLoader b, int limit) {
-    // 128-bit implementation, which must "split up" vectors due to widening conversions
-    // it doesn't help to do the overlapping read trick, due to 32-bit multiply in the formula
-    IntVector acc1 = IntVector.zero(IntVector.SPECIES_128);
-    IntVector acc2 = IntVector.zero(IntVector.SPECIES_128);
-    for (int i = 0; i < limit; i += ByteVector.SPECIES_64.length()) {
-      ByteVector va8 = a.load(ByteVector.SPECIES_64, i);
-      ByteVector vb8 = b.load(ByteVector.SPECIES_64, i);
+    IntVector acc = IntVector.zero(IntVector.SPECIES_128);
+    // 16 bytes at a time
+    for (int i = 0; i < limit; i += ByteVector.SPECIES_128.length()) {
+      IntVector va32 = a.load(ByteVector.SPECIES_128, i).reinterpretAsInts();
+      IntVector vb32 = b.load(ByteVector.SPECIES_128, i).reinterpretAsInts();
 
-      // 16-bit sub
-      Vector<Short> va16 = va8.convertShape(ZERO_EXTEND_B2S, ShortVector.SPECIES_128, 0);
-      Vector<Short> vb16 = vb8.convertShape(ZERO_EXTEND_B2S, ShortVector.SPECIES_128, 0);
-      Vector<Short> diff16 = va16.sub(vb16);
-
-      // 32-bit multiply and add into accumulators: the 16-bit difference is signed
-      Vector<Integer> diff32_1 = diff16.convertShape(S2I, IntVector.SPECIES_128, 0);
-      Vector<Integer> diff32_2 = diff16.convertShape(S2I, IntVector.SPECIES_128, 1);
-      acc1 = acc1.add(diff32_1.mul(diff32_1));
-      acc2 = acc2.add(diff32_2.mul(diff32_2));
+      IntVector diff0 = va32.and(0xFF).sub(vb32.and(0xFF));
+      acc = acc.add(diff0.mul(diff0));
+      IntVector diff1 = va32.lanewise(LSHR, 8).and(0xFF).sub(vb32.lanewise(LSHR, 8).and(0xFF));
+      acc = acc.add(diff1.mul(diff1));
+      IntVector diff2 = va32.lanewise(LSHR, 16).and(0xFF).sub(vb32.lanewise(LSHR, 16).and(0xFF));
+      acc = acc.add(diff2.mul(diff2));
+      // LSHR is a logical shift, so the top byte of each lane needs no mask
+      IntVector diff3 = va32.lanewise(LSHR, 24).sub(vb32.lanewise(LSHR, 24));
+      acc = acc.add(diff3.mul(diff3));
     }
     // reduce
-    return acc1.add(acc2).reduceLanes(ADD);
+    return acc.reduceLanes(ADD);
   }
 
   @Override
