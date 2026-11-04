@@ -3,6 +3,16 @@ Lucene Change Log
 For more information on past and future Lucene versions, please see:
 http://s.apache.org/luceneversions
 
+======================= Lucene-mongot 10.4.0-6 =======================
+
+Bug Fixes
+---------------------
+* GITHUB#16807 (backport): Fix byte vector dot products and square distances staying several
+  times slower for the life of the JVM once both their signed and unsigned (uint8) variants have
+  been used, e.g. when searching UNSIGNED_BYTE and SEVEN_BIT scalar-quantized fields in one JVM.
+  Upstream fixed only the java25 Panama provider; this ports the split signed/unsigned kernels
+  to the java21 provider. (Lantao Jin)
+
 ======================= Lucene-mongot 10.4.0-4 =======================
 
 Optimizations
