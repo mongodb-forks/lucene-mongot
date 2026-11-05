@@ -86,49 +86,6 @@ public abstract class KnnSearchStrategy {
     }
 
     /**
-     * Squashes x to range [0, n)
-     *
-     * <p>This function is smooth and monotonic in x.
-     */
-    private static double squash(double x, int limit) {
-      if (limit == 0) {
-        return 0;
-      }
-      // Expected number of unique items discovered when sampling `x` times from a universe of
-      // `limit` items uniformly at random.
-      return limit * (1 - Math.exp(x * Math.log1p(-1.0 / limit)));
-    }
-
-    @Override
-    public int expectedVisitedNodes(int k, int graphSize, float selectivity, int m) {
-      if (useFilteredSearch(selectivity)) {
-        // TODO: Account for selectivity in ACORN-1
-        return super.expectedVisitedNodes(k, graphSize, selectivity, m);
-      }
-      //  b    = 64 · tanh(M / 32)
-      //  cost = max( min(k, n·s),
-      //              20 · ln(n)/ln(M)  +  uniq( n,  0.376 · k^0.82 · (b/ln b) · ln(n) / s^0.82 ) )
-
-      // M represents half the maximum allowed degree, but in practice values beyond 16 incur
-      // more neighbor pruning, so we cap this penalty at 64 as M -> inf
-      double expectedDegree = 64 * Math.tanh(m / 32.0);
-      // The avg degree directly corresponds to the number of neighbors we score per hop, but
-      // it also shrinks the diameter of the graph by log(degree)
-      double branchingPenality = expectedDegree / Math.log(expectedDegree);
-      // We expect work to increase linearly with k and 1/selectivity, the exponent is derived
-      // empirically and may account for overlapping neighborhoods when filters are uncorrelated
-      double effectiveK = Math.pow(k / selectivity, .82);
-      // Vectors scored to find correct entry point with empirical penalty per layer.
-      double descent = 20 * Math.log(graphSize) / Math.log(m);
-      double bottomLayer =
-          squash(.376 * branchingPenality * effectiveK * Math.log(graphSize), graphSize);
-
-      double minEffort = Math.min(k, graphSize * selectivity);
-
-      return (int) Math.max(minEffort, descent + bottomLayer);
-    }
-
-    /**
      * Whether to use filtered search based on the ratio of vectors that pass the filter
      *
      * @param ratioPassingFilter ratio of vectors that pass the filter
