@@ -36,10 +36,10 @@ import org.apache.lucene.index.VectorSimilarityFunction;
 import org.apache.lucene.search.AcceptDocs;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.search.TopKnnCollector;
+import org.apache.lucene.search.knn.KnnSearchStrategy;
 import org.apache.lucene.store.MMapDirectory;
 import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.IOUtils;
-import org.apache.lucene.util.hnsw.HnswGraphSearcher;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -169,7 +169,8 @@ public class ExhaustiveKnnScanBench {
     // Assert the exhaustive branch (not HNSW) will run for these parameters.
     int graphSize = numVectors;
     int filteredDocCount = Math.min(acceptDocs.cost(), graphSize);
-    int unfilteredVisit = HnswGraphSearcher.expectedVisitedNodes(k, graphSize);
+    int unfilteredVisit =
+        KnnSearchStrategy.Hnsw.DEFAULT.expectedVisitedNodes(k, graphSize, 1f, 16, 32);
     // Mirrors the reader's HNSW condition (unfilteredVisit < filteredDocCount).
     if (unfilteredVisit < filteredDocCount) {
       throw new IllegalStateException(
@@ -207,6 +208,6 @@ public class ExhaustiveKnnScanBench {
   public TopDocs searchExhaustive() throws IOException {
     TopKnnCollector collector = new TopKnnCollector(k, Integer.MAX_VALUE);
     knnReader.search(FIELD, target, collector, acceptDocs);
-    return collector.topDocs();
+    return collector.knnResult().topDocs();
   }
 }

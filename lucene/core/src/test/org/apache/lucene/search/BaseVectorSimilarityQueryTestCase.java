@@ -522,9 +522,19 @@ abstract class BaseVectorSimilarityQueryTestCase<
           "0 < count=" + count + " < numDocs=" + numDocs,
           count > 0 && count < numDocs); // Expect partial results
 
-      // Test timeout with filter
-      int numFiltered = random().nextInt(numDocs / 2, numDocs);
-      Query filter = IntField.newSetQuery(idField, getFiltered(numFiltered));
+      // Test timeout with filter. A mostly-unselective filter makes the format estimate a graph
+      // traversal as cheaper than an exhaustive scan, so a reduced timeout budget should
+      // terminate the traversal partway and produce partial results. Exclude every 10th id so
+      // that every segment sees roughly the same selectivity.
+      // Early termination is only observable when the format chooses graph traversal: a segment
+      // this large does at this selectivity (its cost estimate grows only logarithmically with
+      // segment size, while the scan cost grows linearly with the filtered count).
+      assumeTrue(
+          "no segment large enough to choose graph traversal",
+          reader.leaves().stream().anyMatch(ctx -> ctx.reader().maxDoc() >= 50));
+      int[] filteredIds = IntStream.range(0, numDocs).filter(i -> i % 10 != 0).toArray();
+      int numFiltered = filteredIds.length;
+      Query filter = IntField.newSetQuery(idField, filteredIds);
       Query filteredQuery =
           new CountingQuery(
               getVectorQuery(
@@ -537,8 +547,10 @@ abstract class BaseVectorSimilarityQueryTestCase<
       searcher.setTimeout(() -> false); // Set a timeout which is never met
       assertEquals(numFiltered, searcher.count(filteredQuery));
 
-      searcher.setTimeout(
-          new CountingQueryTimeout(numFiltered - 1)); // Timeout before scoring all filtered docs
+      // A graph traversal polls the timeout roughly once per visited node, so a quarter of the
+      // filtered count fires well before the traversal completes, but after some hits are
+      // collected
+      searcher.setTimeout(new CountingQueryTimeout(numFiltered / 4));
       int filteredCount = searcher.count(filteredQuery);
       assertTrue(
           "0 < filteredCount=" + filteredCount + " < numFiltered=" + numFiltered,

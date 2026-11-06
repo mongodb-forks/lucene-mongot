@@ -23,7 +23,6 @@ import static org.apache.lucene.codecs.lucene99.Lucene99HnswVectorsFormat.HNSW_G
 import static org.apache.lucene.codecs.lucene99.Lucene99HnswVectorsFormat.VERSION_CURRENT;
 import static org.apache.lucene.codecs.lucene99.Lucene99HnswVectorsFormat.VERSION_GROUPVARINT;
 import static org.apache.lucene.codecs.lucene99.Lucene99HnswVectorsReader.SIMILARITY_FUNCTIONS;
-import static org.apache.lucene.util.hnsw.HnswGraphSearcher.expectedVisitedNodes;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -81,6 +80,12 @@ public final class Lucene99HnswVectorsWriter extends KnnVectorsWriter {
   private final TaskExecutor mergeExec;
   private final int tinySegmentsThreshold;
   private final int version;
+  // Level-0 (bottom-layer) degree as actually serialized -- post-dedupe neighbor counts --
+  // accumulated by the most recent writeGraph/reconstructAndWriteGraph and consumed by
+  // writeMeta. NeighborArray.size() can count transient duplicates from graph construction, so
+  // the degree is summed from the deduped actualSize in the serialization loops themselves.
+  private long level0DegreeSum;
+  private int level0NodeCount;
 
   private final List<FieldWriter<?>> fields = new ArrayList<>();
   private boolean finished;
@@ -135,7 +140,7 @@ public final class Lucene99HnswVectorsWriter extends KnnVectorsWriter {
       int version)
       throws IOException {
     if (version < Lucene99HnswVectorsFormat.VERSION_START
-        || version > Lucene99HnswVectorsFormat.VERSION_GROUPVARINT) {
+        || version > Lucene99HnswVectorsFormat.VERSION_CURRENT) {
       throw new IllegalArgumentException("Invalid version: " + version);
     }
     this.M = M;
@@ -250,7 +255,9 @@ public final class Lucene99HnswVectorsWriter extends KnnVectorsWriter {
         vectorIndexLength,
         fieldData.getDocsWithFieldSet().cardinality(),
         graph,
-        graphLevelNodeOffsets);
+        graphLevelNodeOffsets,
+        level0DegreeSum,
+        level0NodeCount);
   }
 
   private void writeSortingField(FieldWriter<?> fieldData, Sorter.DocMap sortMap)
@@ -274,7 +281,9 @@ public final class Lucene99HnswVectorsWriter extends KnnVectorsWriter {
         vectorIndexLength,
         fieldData.getDocsWithFieldSet().cardinality(),
         mockGraph,
-        graphLevelNodeOffsets);
+        graphLevelNodeOffsets,
+        level0DegreeSum,
+        level0NodeCount);
   }
 
   /**
@@ -292,6 +301,8 @@ public final class Lucene99HnswVectorsWriter extends KnnVectorsWriter {
   private HnswGraph reconstructAndWriteGraph(
       OnHeapHnswGraph graph, int[] newToOldMap, int[] oldToNewMap, int[][] levelNodeOffsets)
       throws IOException {
+    level0DegreeSum = 0;
+    level0NodeCount = 0;
     if (graph == null) return null;
 
     List<int[]> nodesByLevel = new ArrayList<>(graph.numLevels());
@@ -305,7 +316,8 @@ public final class Lucene99HnswVectorsWriter extends KnnVectorsWriter {
       int node = nodesOnLevel0.nextInt();
       NeighborArray neighbors = graph.getNeighbors(0, newToOldMap[node]);
       long offset = vectorIndex.getFilePointer();
-      reconstructAndWriteNeighbours(neighbors, oldToNewMap, scratch, maxOrd);
+      level0DegreeSum += reconstructAndWriteNeighbours(neighbors, oldToNewMap, scratch, maxOrd);
+      ++level0NodeCount;
       levelNodeOffsets[0][node] = Math.toIntExact(vectorIndex.getFilePointer() - offset);
     }
 
@@ -374,7 +386,12 @@ public final class Lucene99HnswVectorsWriter extends KnnVectorsWriter {
     };
   }
 
-  private void reconstructAndWriteNeighbours(
+  /**
+   * Writes `neighbors` to index output in sorted order without duplicates.
+   *
+   * @return the number of unique neighbors
+   */
+  private int reconstructAndWriteNeighbours(
       NeighborArray neighbors, int[] oldToNewMap, int[] scratch, int maxOrd) throws IOException {
     int size = neighbors.size();
     // Destructively modify; it's ok we are discarding it after this
@@ -406,6 +423,7 @@ public final class Lucene99HnswVectorsWriter extends KnnVectorsWriter {
         vectorIndex.writeVInt(scratch[i]);
       }
     }
+    return actualSize;
   }
 
   @Override
@@ -455,6 +473,12 @@ public final class Lucene99HnswVectorsWriter extends KnnVectorsWriter {
                 segmentWriteState.infoStream,
                 scorerSupplier.totalVectorCount());
         vectorIndexNodeOffsets = writeGraph(graph);
+      } else {
+        // No graph for this merged field: writeGraph (which resets the accumulators) is not
+        // called, so reset here -- otherwise a previous field's degree would be written for
+        // this graphless field.
+        level0DegreeSum = 0;
+        level0NodeCount = 0;
       }
       long vectorIndexLength = vectorIndex.getFilePointer() - vectorIndexOffset;
       writeMeta(
@@ -463,7 +487,9 @@ public final class Lucene99HnswVectorsWriter extends KnnVectorsWriter {
           vectorIndexLength,
           scorerSupplier.totalVectorCount(),
           graph,
-          vectorIndexNodeOffsets);
+          vectorIndexNodeOffsets,
+          level0DegreeSum,
+          level0NodeCount);
       success = true;
     } finally {
       if (success) {
@@ -480,6 +506,8 @@ public final class Lucene99HnswVectorsWriter extends KnnVectorsWriter {
    * @throws IOException if writing to vectorIndex fails
    */
   private int[][] writeGraph(OnHeapHnswGraph graph) throws IOException {
+    level0DegreeSum = 0;
+    level0NodeCount = 0;
     if (graph == null) return new int[0][0];
     // write vectors' neighbours on each level into the vectorIndex file
     int countOnLevel0 = graph.size();
@@ -510,6 +538,10 @@ public final class Lucene99HnswVectorsWriter extends KnnVectorsWriter {
           }
           scratch[actualSize++] = nnodes[i] - nnodes[i - 1];
         }
+        if (level == 0) {
+          level0DegreeSum += actualSize;
+          level0NodeCount++;
+        }
         // Write the size after duplicates are removed
         vectorIndex.writeVInt(actualSize);
         if (version >= VERSION_GROUPVARINT) {
@@ -533,7 +565,9 @@ public final class Lucene99HnswVectorsWriter extends KnnVectorsWriter {
       long vectorIndexLength,
       int count,
       HnswGraph graph,
-      int[][] graphLevelNodeOffsets)
+      int[][] graphLevelNodeOffsets,
+      long level0DegreeSum,
+      int level0NodeCount)
       throws IOException {
     meta.writeInt(field.number);
     meta.writeInt(field.getVectorEncoding().ordinal());
@@ -585,6 +619,11 @@ public final class Lucene99HnswVectorsWriter extends KnnVectorsWriter {
       memoryOffsetsWriter.finish();
       meta.writeLong(vectorIndex.getFilePointer() - start);
     }
+    if (version >= Lucene99HnswVectorsFormat.VERSION_AVG_DEGREE) {
+      float avgBottomLayerDegree =
+          level0NodeCount > 0 ? (float) (level0DegreeSum / (double) level0NodeCount) : 0;
+      meta.writeInt(Float.floatToIntBits(avgBottomLayerDegree));
+    }
   }
 
   private HnswGraphMerger createGraphMerger(
@@ -626,7 +665,7 @@ public final class Lucene99HnswVectorsWriter extends KnnVectorsWriter {
     if (k <= 0) {
       return true;
     }
-    int expectedVisitedNodes = expectedVisitedNodes(k, numNodes);
+    int expectedVisitedNodes = (int) (k * Math.log(numNodes));
     return numNodes > expectedVisitedNodes && expectedVisitedNodes > 0;
   }
 

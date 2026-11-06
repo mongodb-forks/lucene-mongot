@@ -45,6 +45,20 @@ public abstract class KnnSearchStrategy {
   public abstract void nextVectorsBlock();
 
   /**
+   * Estimates the number of distinct nodes this search strategy expects to visit, accounting for
+   * maxConn and bounded by the graph size. Used to decide between an HNSW search and an exhaustive
+   * scan.
+   *
+   * @param k neighbors to find
+   * @param graphSize size of the graph
+   * @param avgDegree average out-degree of nodes in the bottom layer of the graph
+   * @return expected number of distinct visited nodes, in [0, graphSize]
+   */
+  public int expectedVisitedNodes(int k, int graphSize, float selectivity, int m, float avgDegree) {
+    return (int) (k * Math.log(graphSize));
+  }
+
+  /**
    * A strategy for kNN search that uses HNSW
    *
    * @lucene.experimental
@@ -69,6 +83,51 @@ public abstract class KnnSearchStrategy {
 
     public int filteredSearchThreshold() {
       return filteredSearchThreshold;
+    }
+
+    /**
+     * Squashes x to range [0, n)
+     *
+     * <p>This function is smooth and monotonic in x.
+     */
+    private static double squash(double x, int limit) {
+      if (limit == 0) {
+        return 0;
+      }
+      // Expected number of unique items discovered when sampling `x` times from a universe of
+      // `limit` items uniformly at random.
+      return limit * (1 - Math.exp(x * Math.log1p(-1.0 / limit)));
+    }
+
+    @Override
+    public int expectedVisitedNodes(
+        int k, int graphSize, float selectivity, int m, float avgDegree) {
+      if (useFilteredSearch(selectivity)) {
+        // TODO: Account for selectivity in ACORN-1
+        return super.expectedVisitedNodes(k, graphSize, selectivity, m, avgDegree);
+      }
+
+      // 20 · ln(n)/ln(M)  +  uniq( n,  0.376 · k^0.82 · (b/ln b) · ln(n) / s^0.82 ) )
+
+      // Newer segments store their avg node degree, but for older segments we need to impute it.
+      // M represents half the maximum allowed degree, but in practice values beyond 16 incur
+      // more neighbor pruning, so we cap this penalty at 64 as M -> inf
+      double expectedDegree = avgDegree > 0 ? avgDegree : 64 * Math.tanh(m / 32.0);
+
+      // The avg degree directly corresponds to the number of neighbors we score per hop, but
+      // it also shrinks the diameter of the graph by log(degree)
+      double branchingPenality = expectedDegree / Math.log(expectedDegree);
+      // We expect work to increase linearly with k and 1/selectivity, the exponent is derived
+      // empirically and may account for overlapping neighborhoods when filters are uncorrelated
+      double effectiveK = Math.pow(k / selectivity, .82);
+      // Vectors scored to find correct entry point with empirical penalty per layer.
+      double descent = 20 * Math.log(graphSize) / Math.log(m);
+      double bottomLayer =
+          squash(.376 * branchingPenality * effectiveK * Math.log(graphSize), graphSize);
+
+      double minEffort = Math.min(k, graphSize * selectivity);
+
+      return (int) Math.max(minEffort, descent + bottomLayer);
     }
 
     /**
