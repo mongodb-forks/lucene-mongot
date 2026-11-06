@@ -36,7 +36,8 @@ import org.apache.lucene.util.NamedSPILoader;
 public abstract class KnnVectorsFormat implements NamedSPILoader.NamedSPI {
 
   /** The maximum number of vector dimensions */
-  public static final int DEFAULT_MAX_DIMENSIONS = 1024;
+  /** fork: raised from 1024 to support 2048-d production embeddings */
+  public static final int DEFAULT_MAX_DIMENSIONS = 4096;
 
   /**
    * This static holder class prevents classloading deadlock by delaying init of doc values formats

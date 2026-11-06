@@ -77,7 +77,7 @@ abstract class AbstractKnnVectorQuery extends Query {
 
     final Weight filterWeight;
     if (filter != null) {
-      // rewrite inner filter query first to determine if its a match all
+      // rewrite inner filter query first to determine if it's a match all
       // or match no docs query, so we can skip the knn search
       Query rewrittenFilter = filter.rewrite(indexSearcher);
       if (rewrittenFilter.getClass() == MatchNoDocsQuery.class) {
@@ -107,16 +107,22 @@ abstract class AbstractKnnVectorQuery extends Query {
 
     List<LeafReaderContext> leafReaderContexts = new ArrayList<>(reader.leaves());
     List<Callable<AcceptDocs>> weights = new ArrayList<>(leafReaderContexts.size());
-    for (LeafReaderContext context : leafReaderContexts) {
-      weights.add(() -> getLeafWeight(context, filterWeight));
-    }
-    List<AcceptDocs> acceptDocs = taskExecutor.invokeAll(weights);
 
-    KnnCollectorManager knnCollectorManager = getKnnCollectorManager(k, indexSearcher);
-    OptimisticKnnCollectorManager optimisticCollectorManager =
-        new OptimisticKnnCollectorManager(k, knnCollectorManager);
-    TimeLimitingKnnCollectorManager timeLimitingKnnCollectorManager =
-        new TimeLimitingKnnCollectorManager(optimisticCollectorManager, indexSearcher.getTimeout());
+    List<AcceptDocs> acceptDocs;
+    if (filterWeight != null) {
+      // Filter may be arbitrarily expensive, so parallelize the result if possible.
+      for (LeafReaderContext context : leafReaderContexts) {
+        weights.add(() -> getLeafWeight(context, filterWeight));
+      }
+      acceptDocs = taskExecutor.invokeAll(weights);
+    } else {
+      acceptDocs = new ArrayList<>(leafReaderContexts.size());
+      for (LeafReaderContext leaf : leafReaderContexts) {
+        AcceptDocs docs =
+            AcceptDocs.fromLiveDocs(leaf.reader().getLiveDocs(), leaf.reader().maxDoc());
+        acceptDocs.add(docs);
+      }
+    }
 
     int cumulativeCost = 0;
     for (AcceptDocs a : acceptDocs) {
@@ -124,11 +130,36 @@ abstract class AbstractKnnVectorQuery extends Query {
     }
     final int totalHits = cumulativeCost;
 
+    // Each leaf's expected share of the global top-k is its share of total filter hits, not its
+    // share of total docs: precompute per-leaf perLeafTopK here, where the filter costs are
+    // known, so the phase-1 collector searches to the same depth the acceptance check demands.
+
+    int[] perLeafTopKByOrd = new int[leafReaderContexts.size()];
+    for (int i = 0; i < leafReaderContexts.size(); ++i) {
+      LeafReaderContext context = leafReaderContexts.get(i);
+      perLeafTopKByOrd[context.ord] =
+          perLeafTopKCalculation(totalHits, acceptDocs.get(i).cost(), k);
+    }
+
+    KnnCollectorManager knnCollectorManager = getKnnCollectorManager(k, indexSearcher);
+    OptimisticKnnCollectorManager optimisticCollectorManager =
+        new OptimisticKnnCollectorManager(k, knnCollectorManager, perLeafTopKByOrd);
+    TimeLimitingKnnCollectorManager timeLimitingKnnCollectorManager =
+        new TimeLimitingKnnCollectorManager(optimisticCollectorManager, indexSearcher.getTimeout());
+
+    final boolean unfiltered = filterWeight == null;
     List<Callable<KnnResult>> tasks = new ArrayList<>(leafReaderContexts.size());
     for (int i = 0; i < leafReaderContexts.size(); i++) {
       LeafReaderContext context = leafReaderContexts.get(i);
       AcceptDocs weight = acceptDocs.get(i);
-      tasks.add(() -> searchLeaf(context, weight, totalHits, timeLimitingKnnCollectorManager));
+      tasks.add(
+          () ->
+              searchLeaf(
+                  context,
+                  weight,
+                  perLeafTopKByOrd[context.ord],
+                  unfiltered,
+                  timeLimitingKnnCollectorManager));
     }
     Map<Integer, KnnResult> perLeafResults = new HashMap<>();
     TopDocs topK = runSearchTasks(tasks, taskExecutor, perLeafResults, leafReaderContexts);
@@ -151,9 +182,16 @@ abstract class AbstractKnnVectorQuery extends Query {
         AcceptDocs accept = acceptDocsIter.next();
 
         KnnResult perLeaf = perLeafResults.get(ctx.ord);
-        if (perLeaf.hasMoreCompetitiveScores(perLeafTopKCalculation(ctx, k), minTopKScore)) {
+        if (perLeaf.hasMoreCompetitiveScores(minTopKScore)) {
           // All this leaf's hits are at or above the global topK min score; explore it further
-          tasks.add(() -> searchLeaf(ctx, accept, totalHits, knnCollectorManagerPhase2));
+          tasks.add(
+              () ->
+                  searchLeaf(
+                      ctx,
+                      accept,
+                      perLeafTopKByOrd[ctx.ord],
+                      unfiltered,
+                      knnCollectorManagerPhase2));
         } else {
           // This leaf is tapped out; discard the context from the active list so we maintain
           // correspondence between tasks and leaves
@@ -190,10 +228,12 @@ abstract class AbstractKnnVectorQuery extends Query {
   protected KnnResult searchLeaf(
       LeafReaderContext ctx,
       AcceptDocs acceptDocs,
-      int totalHits,
+      int perLeafTopK,
+      boolean unfiltered,
       TimeLimitingKnnCollectorManager timeLimitingKnnCollectorManager)
       throws IOException {
-    KnnResult results = getLeafResults(ctx, acceptDocs, totalHits, timeLimitingKnnCollectorManager);
+    KnnResult results =
+        getLeafResults(ctx, acceptDocs, perLeafTopK, unfiltered, timeLimitingKnnCollectorManager);
     results.addDocBase(ctx.docBase);
     return results;
   }
@@ -222,14 +262,20 @@ abstract class AbstractKnnVectorQuery extends Query {
   private KnnResult getLeafResults(
       LeafReaderContext ctx,
       AcceptDocs acceptDocs,
-      int totalHits,
+      int perLeafTopK,
+      boolean unfiltered,
       TimeLimitingKnnCollectorManager timeLimitingKnnCollectorManager)
       throws IOException {
 
+    if (unfiltered) {
+      // No filter: every live doc is a candidate, so there is nothing to short-circuit or fall
+      // back from -- the reader's own `k >= numVectors` gate already scans tiny segments. The
+      // visit limit stays unbounded, as an exhaustive fallback is pointless without a filter.
+      return approximateSearch(ctx, acceptDocs, Integer.MAX_VALUE, timeLimitingKnnCollectorManager);
+    }
+
     final int cost = acceptDocs.cost();
     QueryTimeout queryTimeout = timeLimitingKnnCollectorManager.getQueryTimeout();
-
-    final int perLeafTopK = perLeafTopKCalculation(totalHits, acceptDocs.cost(), k);
 
     if (cost <= perLeafTopK) {
       // If there are <= perLeafTopK possible matches, short-circuit and perform exact search, since
@@ -268,10 +314,14 @@ abstract class AbstractKnnVectorQuery extends Query {
   static class OptimisticKnnCollectorManager implements KnnCollectorManager {
     private final int k;
     private final KnnCollectorManager delegate;
+    // leaf ord -> perLeafTopK computed from the leaf's share of total filter hits; leaves not
+    // present (e.g. a MemoryIndex with ctx.parent == null) fall back to k
+    private final int[] perLeafTopKByOrd;
 
-    OptimisticKnnCollectorManager(int k, KnnCollectorManager delegate) {
+    OptimisticKnnCollectorManager(int k, KnnCollectorManager delegate, int[] perLeafTopKByOrd) {
       this.k = k;
       this.delegate = delegate;
+      this.perLeafTopKByOrd = perLeafTopKByOrd;
     }
 
     @Override
@@ -280,24 +330,12 @@ abstract class AbstractKnnVectorQuery extends Query {
         throws IOException {
       // The delegate supports optimistic collection
       if (delegate.isOptimistic() && context.parent != null) {
-        int perLeafTopK = perLeafTopKCalculation(context, k);
+        int perLeafTopK = perLeafTopKByOrd[context.ord];
         return delegate.newOptimisticCollector(
             visitedLimit, searchStrategy, context, perLeafTopK, k);
       }
       // We don't support optimistic collection, so just do regular execution path
       return delegate.newCollector(visitedLimit, searchStrategy, context);
-    }
-  }
-
-  private static int perLeafTopKCalculation(LeafReaderContext ctx, int k) {
-    // ctx.parent could be null if this is a MemoryIndex
-    if (ctx.parent != null) {
-      int maxHits = ctx.reader().maxDoc(); // TODO(edarke) FIXME
-      int leafHits = ctx.parent.reader().maxDoc();
-      return perLeafTopKCalculation(maxHits, leafHits, k);
-    } else {
-      // We don't have a good way to estimate perLeafTopK here, so just do approximate search
-      return k;
     }
   }
 
@@ -308,9 +346,9 @@ abstract class AbstractKnnVectorQuery extends Query {
 
   /*
    * Returns perLeafTopK, the expected number (K * leafProportion) of hits in a leaf with the given
-   * proportion of the entire index, plus three standard deviations of a binomial distribution. Math
-   * says there is a 95% probability that this segment's contribution to the global top K hits are
-   * <= perLeafTopK.
+   * proportion of the total filter hits (or of all docs, when unfiltered), plus three standard
+   * deviations of a binomial distribution. Math says there is a 95% probability that this
+   * segment's contribution to the global top K hits are <= perLeafTopK.
    */
   private static int perLeafTopKCalculation(int k, float leafProportion) {
     return (int)

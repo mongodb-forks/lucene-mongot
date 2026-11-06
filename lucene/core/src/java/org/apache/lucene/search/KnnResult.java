@@ -57,16 +57,9 @@ public record KnnResult(Method strategy, TopDocs topDocs, int strongResultCount)
    * whose weakest strong result is still competitive with {@code minCompetitiveScore}, meaning that
    * re-searching this segment more deeply could find further competitive hits.
    *
-   * @param perLeafK the number of strong results the search for this segment asked for
    * @param minCompetitiveScore the minimum score needed to make the global top hits
    */
-  public boolean hasMoreCompetitiveScores(int perLeafK, float minCompetitiveScore) {
-    if (strongResultCount < perLeafK) {
-      // A search that collected fewer than perLeafK strong hits presumably scored everything that
-      // matched.
-      return false;
-    }
-
+  public boolean hasMoreCompetitiveScores(float minCompetitiveScore) {
     return strategy == Method.APPROXIMATE
         && strongResultCount > 0
         && topDocs.scoreDocs[strongResultCount - 1].score >= minCompetitiveScore;

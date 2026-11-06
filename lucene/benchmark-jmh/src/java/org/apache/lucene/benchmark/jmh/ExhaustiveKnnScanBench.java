@@ -169,7 +169,8 @@ public class ExhaustiveKnnScanBench {
     // Assert the exhaustive branch (not HNSW) will run for these parameters.
     int graphSize = numVectors;
     int filteredDocCount = Math.min(acceptDocs.cost(), graphSize);
-    int unfilteredVisit = KnnSearchStrategy.Hnsw.DEFAULT.expectedVisitedNodes(k, graphSize, 1f, 16);
+    int unfilteredVisit =
+        KnnSearchStrategy.Hnsw.DEFAULT.expectedVisitedNodes(k, graphSize, 1f, 16, 32);
     // Mirrors the reader's HNSW condition (unfilteredVisit < filteredDocCount).
     if (unfilteredVisit < filteredDocCount) {
       throw new IllegalStateException(

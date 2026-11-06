@@ -42,7 +42,7 @@ public final class OnHeapHnswGraph extends HnswGraph implements Accountable {
 
   // the internal graph representation where the first dimension is node id and second dimension is
   // level
-  // e.g. graph[1][2] is all the neighbours of node 1 at level 2
+  // e.g. graph[1][2] is all the neighbors of node 1 at level 2
   private NeighborArray[][] graph;
   // essentially another 2d map which the first dimension is level and second dimension is node id,
   // this is only
@@ -79,7 +79,7 @@ public final class OnHeapHnswGraph extends HnswGraph implements Accountable {
   OnHeapHnswGraph(int M, int numNodes) {
     this.entryNode = new AtomicReference<>(new EntryNode(-1, 1));
     // Neighbours' size on upper levels (nsize) and level 0 (nsize0)
-    // We allocate extra space for neighbours, but then prune them to keep allowed maximum
+    // We allocate extra space for neighbors, but then prune them to keep allowed maximum
     this.nsize = M + 1;
     this.nsize0 = (M * 2 + 1);
     noGrowth = numNodes != -1;

@@ -292,7 +292,8 @@ public class Lucene104ScalarQuantizedVectorsFormat extends FlatVectorsFormat {
 
   @Override
   public int getMaxDimensions(String fieldName) {
-    return 1024;
+    // fork: raised from 1024 to support 2048-d production embeddings (e.g. voyage)
+    return 4096;
   }
 
   @Override
