@@ -5,6 +5,16 @@ http://s.apache.org/luceneversions
 
 ======================= Lucene-mongot 10.4.0-4 =======================
 
+API Changes
+---------------------
+* GITHUB#39: Add an optional lower bound to KnnSearchStrategy.Hnsw's filtered search threshold via
+  a new Hnsw(int filteredSearchThreshold, int minFilteredSearchThreshold) constructor: filtered
+  (ACORN-1) search now engages only when the percentage of vectors passing the filter falls within
+  [minFilteredSearchThreshold, filteredSearchThreshold). The existing single-argument constructor
+  and Hnsw.DEFAULT default the lower bound to 0, preserving prior behavior. The lower bound is
+  forwarded through KnnSearchStrategy.Patience wrapping in HnswQueueSaturationCollector.
+  (Rithu Eswaramoorthy)
+
 Optimizations
 ---------------------
 * GITHUB#32 Faster exhaustive search in Lucene99HnswVectorsReader
