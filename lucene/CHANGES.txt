@@ -118,6 +118,16 @@ Improvements
   faceting, removing usages of the deprecated IndexSearcher#search(Query, Collector).
   (Luca Cavanna)
 
+API Changes
+---------------------
+* GITHUB#39: Add an optional lower bound to KnnSearchStrategy.Hnsw's filtered search threshold via
+  a new Hnsw(int filteredSearchThreshold, int minFilteredSearchThreshold) constructor: filtered
+  (ACORN-1) search now engages only when the percentage of vectors passing the filter falls within
+  [minFilteredSearchThreshold, filteredSearchThreshold). The existing single-argument constructor
+  and Hnsw.DEFAULT default the lower bound to 0, preserving prior behavior. The lower bound is
+  forwarded through KnnSearchStrategy.Patience wrapping in HnswQueueSaturationCollector.
+  (Rithu Eswaramoorthy)
+
 Optimizations
 ---------------------
 
