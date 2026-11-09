@@ -90,8 +90,8 @@ public abstract class KnnSearchStrategy {
      *
      * <p>This function is smooth and monotonic in x.
      */
-    private static double squash(double x, int limit) {
-      if (limit == 0) {
+    private static double squash(double x, double limit) {
+      if (limit <= 1) {
         return 0;
       }
       // Expected number of unique items discovered when sampling `x` times from a universe of
@@ -107,27 +107,28 @@ public abstract class KnnSearchStrategy {
         return super.expectedVisitedNodes(k, graphSize, selectivity, m, avgDegree);
       }
 
-      // 20 · ln(n)/ln(M)  +  uniq( n,  0.376 · k^0.82 · (b/ln b) · ln(n) / s^0.82 ) )
+      // Required Scores: min(k, n*s)
+      // Descent term: 16 * ln(n) / ln(M)
+      // Cost for k=1: b*ln(n)
+      // Max discoveries: min(n, b * k/s)
+      // FILTERED_COST_ESTIMATE: 0.3308·k^0.697·b·ln(n)/s^0.737
+      // cost = max( MIN_SCORES, DESCENT + max(BASE_COST, uniq(MAX_DISCOVERIES,
+      // FILTERED_COST_ESTIMATE ) ) )
 
-      // Newer segments store their avg node degree, but for older segments we need to impute it.
-      // M represents half the maximum allowed degree, but in practice values beyond 16 incur
-      // more neighbor pruning, so we cap this penalty at 64 as M -> inf
-      double expectedDegree = avgDegree > 0 ? avgDegree : 64 * Math.tanh(m / 32.0);
+      // Newer segments store their avg node degree, but for older segments we need a conservative
+      // estimate
+      double expectedDegree = avgDegree > 0 ? avgDegree : 16;
 
-      // The avg degree directly corresponds to the number of neighbors we score per hop, but
-      // it also shrinks the diameter of the graph by log(degree)
-      double branchingPenality = expectedDegree / Math.log(expectedDegree);
-      // We expect work to increase linearly with k and 1/selectivity, the exponent is derived
-      // empirically and may account for overlapping neighborhoods when filters are uncorrelated
-      double effectiveK = Math.pow(k / selectivity, .82);
-      // Vectors scored to find correct entry point with empirical penalty per layer.
-      double descent = 20 * Math.log(graphSize) / Math.log(m);
-      double bottomLayer =
-          squash(.376 * branchingPenality * effectiveK * Math.log(graphSize), graphSize);
+      double requiredScores = Math.min(k, graphSize * selectivity);
+      double s = Math.max(.001, selectivity);
+      double logN = Math.log(graphSize);
+      double descent = .70 * logN * logN;
+      double baseCost = expectedDegree * logN;
+      double localUniverse = Math.min(graphSize, expectedDegree * k / s);
+      double filteredCostEstimate = .28 * Math.pow(k / s, .71) * expectedDegree * logN;
+      double bottomExplorationCost = Math.max(baseCost, filteredCostEstimate);
 
-      double minEffort = Math.min(k, graphSize * selectivity);
-
-      return (int) Math.max(minEffort, descent + bottomLayer);
+      return (int) Math.max(requiredScores, descent + squash(localUniverse, bottomExplorationCost));
     }
 
     /**
