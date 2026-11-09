@@ -88,7 +88,15 @@ public final class Lucene99HnswVectorsFormat extends KnnVectorsFormat {
 
   public static final int VERSION_START = 0;
   public static final int VERSION_GROUPVARINT = 1;
-  public static final int VERSION_CURRENT = VERSION_GROUPVARINT;
+
+  /**
+   * Adds the average bottom-layer (level 0) node degree per field to the meta file, appended at the
+   * end of each field entry. Readers should default to 0 when the segment was written by an older
+   * version.
+   */
+  public static final int VERSION_AVG_DEGREE = 2;
+
+  public static final int VERSION_CURRENT = VERSION_AVG_DEGREE;
 
   /**
    * A maximum configurable maximum max conn.
