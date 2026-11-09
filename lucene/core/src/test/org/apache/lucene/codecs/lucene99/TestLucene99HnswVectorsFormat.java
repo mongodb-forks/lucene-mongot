@@ -34,6 +34,7 @@ import org.apache.lucene.index.CodecReader;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.tests.index.BaseKnnVectorsFormatTestCase;
@@ -94,6 +95,88 @@ public class TestLucene99HnswVectorsFormat extends BaseKnnVectorsFormatTestCase 
           assertEquals(vector.length * Float.BYTES, (long) offHeap.get("vec"));
           assertNotNull(offHeap.get("vex"));
           assertEquals(2, offHeap.size());
+        }
+      }
+    }
+  }
+
+  public void testAvgBottomLayerDegree() throws IOException {
+    // v2 (VERSION_CURRENT): avg degree is written on flush, recomputed on merge
+    Codec v2 =
+        new FilterCodec("testAvgDegreeV2", TestUtil.getDefaultCodec()) {
+          @Override
+          public KnnVectorsFormat knnVectorsFormat() {
+            return new Lucene99HnswVectorsFormat(
+                16, 100, 1, null, 0, Lucene99HnswVectorsFormat.VERSION_CURRENT);
+          }
+        };
+    // v1: no avg degree in the meta, reader must default to 0
+    Codec v1 =
+        new FilterCodec("testAvgDegreeV1", TestUtil.getDefaultCodec()) {
+          @Override
+          public KnnVectorsFormat knnVectorsFormat() {
+            return new Lucene99HnswVectorsFormat(
+                16, 100, 1, null, 0, Lucene99HnswVectorsFormat.VERSION_GROUPVARINT);
+          }
+        };
+
+    for (Codec codec : new Codec[] {v2, v1}) {
+      try (Directory dir = newDirectory()) {
+        IndexWriterConfig cfg = newIndexWriterConfig();
+        cfg.setCodec(codec);
+        try (IndexWriter w = new IndexWriter(dir, cfg)) {
+          // two segments via flush() (no commit): the NRT reader pool holds them, so nothing
+          // ever resolves the anonymous FilterCodec by name from a segments_N file
+          for (int seg = 0; seg < 2; seg++) {
+            for (int i = 0; i < 50; i++) {
+              Document doc = new Document();
+              doc.add(new KnnFloatVectorField("f", randomVector(16), DOT_PRODUCT));
+              w.addDocument(doc);
+            }
+            w.flush();
+          }
+          // every leaf carries its own (legitimately different) average degree
+          try (DirectoryReader reader = DirectoryReader.open(w)) {
+            assertEquals(2, reader.leaves().size());
+            readAvgDegree(reader, codec == v2);
+            // merge rebuilds the graph; the value must be present (v2) or still default 0 (v1)
+            w.forceMerge(1);
+            DirectoryReader merged = DirectoryReader.openIfChanged(reader);
+            assertNotNull("expected a new reader after forceMerge", merged);
+            try (DirectoryReader m = merged) {
+              readAvgDegree(m, codec == v2);
+            }
+          }
+        }
+        // the anonymous FilterCodec is not in the SPI registry, so wipe the directory before
+        // the framework's post-test CheckIndex would try to resolve it by name
+        for (String f : dir.listAll()) {
+          dir.deleteFile(f);
+        }
+      }
+    }
+  }
+
+  private static void readAvgDegree(DirectoryReader reader, boolean expectPresent)
+      throws IOException {
+    {
+      for (var ctx : reader.leaves()) {
+        LeafReader r = ctx.reader();
+        assertTrue("expected a CodecReader", r instanceof CodecReader);
+        CodecReader codecReader = (CodecReader) r;
+        KnnVectorsReader knnVectorsReader = codecReader.getVectorReader();
+        if (knnVectorsReader instanceof PerFieldKnnVectorsFormat.FieldsReader fieldsReader) {
+          knnVectorsReader = fieldsReader.getFieldReader("f");
+        }
+        assertTrue(
+            "unexpected reader: " + knnVectorsReader.getClass(),
+            knnVectorsReader instanceof Lucene99HnswVectorsReader);
+        float avg = ((Lucene99HnswVectorsReader) knnVectorsReader).getAvgBottomLayerDegree("f");
+        if (expectPresent) {
+          assertTrue("expected positive avg degree, got " + avg, avg > 0f);
+          assertTrue("avg degree above level-0 max: " + avg, avg <= 32f);
+        } else {
+          assertEquals("older format must default to 0", 0f, avg, 0f);
         }
       }
     }
