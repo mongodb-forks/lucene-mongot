@@ -118,6 +118,16 @@ Improvements
   faceting, removing usages of the deprecated IndexSearcher#search(Query, Collector).
   (Luca Cavanna)
 
+API Changes
+---------------------
+* GITHUB#39: Add an optional lower bound to KnnSearchStrategy.Hnsw's filtered search threshold via
+  a new Hnsw(int filteredSearchThreshold, int minFilteredSearchThreshold) constructor: filtered
+  (ACORN-1) search now engages only when the percentage of vectors passing the filter falls within
+  [minFilteredSearchThreshold, filteredSearchThreshold). The existing single-argument constructor
+  and Hnsw.DEFAULT default the lower bound to 0, preserving prior behavior. The lower bound is
+  forwarded through KnnSearchStrategy.Patience wrapping in HnswQueueSaturationCollector.
+  (Rithu Eswaramoorthy)
+
 Optimizations
 ---------------------
 
@@ -840,6 +850,13 @@ Other
 * GITHUB#16215: Extract segment-boundary check into helper in QueryUtils (Luca Cavanna)
 
 * GITHUB#16258: Extract per-doc assertion helpers in QueryUtils (Luca Cavanna)
+
+* GITHUB#23: Add Scorer#preferDocAtATimeWindowScoring() (default false) so a lead clause can opt a
+  top-level conjunction out of the score-first window path (GITHUB#14701) and back to doc-at-a-time
+  window scoring in BlockMaxConjunctionBulkScorer. Block-join scorers (ToChildBlockJoinQuery /
+  ToParentBlockJoinQuery) opt in: their per-document score is expensive and they expose no useful
+  impacts, so buffering and scoring the whole lead window up front is pure overhead and can roughly
+  double latency for scored block-join conjunctions. Matches and scores are unchanged. (Tianxiao Wei)
 
 ======================= Lucene 10.4.0 =======================
 

@@ -60,8 +60,15 @@ public final class Lucene90PointsFormat extends PointsFormat {
   /** Filename extension for the meta per field */
   public static final String META_EXTENSION = "kdm";
 
-  static final int VERSION_START = 0;
-  static final int VERSION_BKD_VECTORIZED_BPV24 = 1;
+  public static final int VERSION_START = 0;
+  public static final int VERSION_BKD_VECTORIZED_BPV24 = 1;
+
+  /**
+   * Matches upstream. Writers that must stay readable by Lucene 9.11.1 (the fork's {@code
+   * backward_codecs.lucene99.Lucene99Codec}) opt down explicitly by passing {@link #VERSION_START}
+   * to {@link #Lucene90PointsFormat(int)} — a 9.11 reader rejects any newer header via {@link
+   * org.apache.lucene.codecs.CodecUtil#checkIndexHeader}.
+   */
   static final int VERSION_CURRENT = VERSION_BKD_VECTORIZED_BPV24;
 
   private static final Map<Integer, Integer> VERSION_TO_BKD_VERSION =
@@ -76,8 +83,11 @@ public final class Lucene90PointsFormat extends PointsFormat {
     this(VERSION_CURRENT);
   }
 
-  /** Constructor that takes a version. This is used for testing with older versions. */
-  Lucene90PointsFormat(int version) {
+  /**
+   * Constructor that takes a version, in {@code [VERSION_START, VERSION_BKD_VECTORIZED_BPV24]}.
+   * Public so consumers can opt up from the pinned {@link #VERSION_CURRENT} default.
+   */
+  public Lucene90PointsFormat(int version) {
     if (VERSION_TO_BKD_VERSION.containsKey(version) == false) {
       throw new IllegalArgumentException("Invalid version: " + version);
     }
