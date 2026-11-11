@@ -108,7 +108,7 @@ if [ ${#modules[@]} -eq 0 ]; then
 fi
 
 if ! command -v evergreen &>/dev/null; then
-  log error "'evergreen' CLI not found. Install it from https://evergreen.mongodb.com/settings"
+  log error "'evergreen' CLI not found. Install it from https://spruce.corp.mongodb.com/preferences/cli"
   exit 1
 fi
 
