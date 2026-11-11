@@ -62,7 +62,7 @@ log() {
   echo "$status $@"
 }
 
-EVERGREEN_API="https://evergreen.mongodb.com/rest/v2"
+EVERGREEN_API="https://evergreen.corp.mongodb.com/rest/v2"
 
 # Set desired version and release tag from command line arguments.
 if [ -z "$1" ]; then
@@ -84,16 +84,16 @@ if ! git rev-parse --verify "${release_tag}^{}" >/dev/null 2>&1; then
   log fatal "Tag '${release_tag}' not found. Run 'git fetch --tags' first."
 fi
 
-# Set evergreen credentials from ~/.evergreen.yml.
+# Get an OAuth token from the evergreen CLI.
 log status "Checking for evergreen credentials..."
-evergreen_user=$(grep "^user: " $HOME/.evergreen.yml | cut -c7-)
-evergreen_api_key=$(grep "^api_key: " $HOME/.evergreen.yml | cut -c10-)
-if [ -z "$evergreen_user" ] || [ -z "$evergreen_api_key" ]; then
-  log error "Missing evergreen credentials. Please set up the evergreen CLI!"
-  exit 1
-else
-  log ok "Detected evergreen user '${evergreen_user}'"
+if ! command -v evergreen &>/dev/null; then
+  log fatal "'evergreen' CLI not found. Install it from https://spruce.corp.mongodb.com/preferences/cli"
 fi
+evergreen_token=$(evergreen client get-oauth-token 2>/dev/null | tail -1) || true
+if [ -z "$evergreen_token" ]; then
+  log fatal "Could not get an evergreen OAuth token. Run 'evergreen login' and retry."
+fi
+log ok "Got evergreen OAuth token"
 
 project_name="lucene-mongot-${version}"
 branch_name="mongot_${version//\./_}"
@@ -101,11 +101,11 @@ echo
 log status "Creating evergreen project '${project_name}'..."
 
 # Create the evergreen project if it doesn't exist.
-if curl -fs -H "Api-User: $evergreen_user" -H "Api-Key: $evergreen_api_key" \
+if curl -fs -H "Authorization: Bearer $evergreen_token" \
     $EVERGREEN_API/projects/$project_name >/dev/null; then
   log ok "Evergreen project already exists, skipping creation."
 else
-  copy_response=$(curl -fsSL -H "Api-User: $evergreen_user" -H "Api-Key: $evergreen_api_key" \
+  copy_response=$(curl -fsSL -H "Authorization: Bearer $evergreen_token" \
      -X POST "$EVERGREEN_API/projects/lucene-mongot/copy?new_project=$project_name")
   copy_exitcode=$?
 
@@ -117,7 +117,7 @@ fi
 
 # Configure the project branch and display name, and enable it.
 log "Configuring evergreen project..."
-configure_response=$(curl -fsSL -H "Api-User: $evergreen_user" -H "Api-Key: $evergreen_api_key" \
+configure_response=$(curl -fsSL -H "Authorization: Bearer $evergreen_token" \
     -H "Content-Type: application/json" -d @- \
     -X PATCH $EVERGREEN_API/projects/$project_name <<EOF
 {
@@ -176,4 +176,4 @@ log "Pushing '${branch_name}' to origin..."
 git push -u origin "$branch_name"
 
 echo
-log ok "Success! See project waterfall at https://spruce.mongodb.com/commits/$project_name"
+log ok "Success! See project waterfall at https://spruce.corp.mongodb.com/project/$project_name/waterfall"
