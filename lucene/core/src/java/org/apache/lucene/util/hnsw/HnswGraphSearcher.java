@@ -337,11 +337,13 @@ public class HnswGraphSearcher extends AbstractHnswGraphSearcher {
       }
 
       numNodes = (int) Math.min(numNodes, results.visitLimit() - results.visitedCount());
-      results.incVisitedCount(numNodes);
       if (numNodes > 0
           && scorer.bulkScore(bulkNodes, bulkScores, numNodes)
               > results.minCompetitiveSimilarity()) {
         for (int i = 0; i < numNodes; i++) {
+          // Interleaving increments with collect() lets MultiLeafKnnCollector's (visited &
+          // interval) == 0 sync trigger fire as in 10.1.
+          results.incVisitedCount(1);
           int node = bulkNodes[i];
           float score = bulkScores[i];
           if (score >= minAcceptedSimilarity) {
@@ -359,6 +361,10 @@ public class HnswGraphSearcher extends AbstractHnswGraphSearcher {
             }
           }
         }
+      } else {
+        // If the batch is not competitive, they still count a visited. This behaves the same as
+        // 10.1.
+        results.incVisitedCount(numNodes);
       }
       if (results.getSearchStrategy() != null) {
         results.getSearchStrategy().nextVectorsBlock();

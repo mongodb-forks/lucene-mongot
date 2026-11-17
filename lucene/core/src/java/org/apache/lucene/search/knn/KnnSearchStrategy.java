@@ -28,6 +28,7 @@ import org.apache.lucene.search.HnswQueueSaturationCollector;
  */
 public abstract class KnnSearchStrategy {
   public static final int DEFAULT_FILTERED_SEARCH_THRESHOLD = 0;
+  public static final int DEFAULT_MIN_FILTERED_SEARCH_THRESHOLD = 0;
 
   /** Override and implement search strategy instance equivalence properly in a subclass. */
   @Override
@@ -53,6 +54,7 @@ public abstract class KnnSearchStrategy {
     public static final Hnsw DEFAULT = new Hnsw(DEFAULT_FILTERED_SEARCH_THRESHOLD);
 
     private final int filteredSearchThreshold;
+    private final int minFilteredSearchThreshold;
 
     /**
      * Create a new Hnsw strategy
@@ -61,14 +63,39 @@ public abstract class KnnSearchStrategy {
      *     100 where 0 means never use filtered search and 100 means always use filtered search.
      */
     public Hnsw(int filteredSearchThreshold) {
+      this(filteredSearchThreshold, DEFAULT_MIN_FILTERED_SEARCH_THRESHOLD);
+    }
+
+    /**
+     * Create a new Hnsw strategy
+     *
+     * @param filteredSearchThreshold threshold for filtered search, a percentage value from 0 to
+     *     100 where 0 means never use filtered search and 100 means always use filtered search.
+     * @param minFilteredSearchThreshold lower bound for filtered search, a percentage value from 0
+     *     to 100 below which filtered search is never used. Must be &lt;= filteredSearchThreshold;
+     *     0 means no lower bound.
+     */
+    public Hnsw(int filteredSearchThreshold, int minFilteredSearchThreshold) {
       if (filteredSearchThreshold < 0 || filteredSearchThreshold > 100) {
         throw new IllegalArgumentException("filteredSearchThreshold must be >= 0 and <= 100");
       }
+      if (minFilteredSearchThreshold < 0 || minFilteredSearchThreshold > 100) {
+        throw new IllegalArgumentException("minFilteredSearchThreshold must be >= 0 and <= 100");
+      }
+      if (minFilteredSearchThreshold > filteredSearchThreshold) {
+        throw new IllegalArgumentException(
+            "minFilteredSearchThreshold must be <= filteredSearchThreshold");
+      }
       this.filteredSearchThreshold = filteredSearchThreshold;
+      this.minFilteredSearchThreshold = minFilteredSearchThreshold;
     }
 
     public int filteredSearchThreshold() {
       return filteredSearchThreshold;
+    }
+
+    public int minFilteredSearchThreshold() {
+      return minFilteredSearchThreshold;
     }
 
     /**
@@ -79,7 +106,9 @@ public abstract class KnnSearchStrategy {
      */
     public final boolean useFilteredSearch(float ratioPassingFilter) {
       assert ratioPassingFilter >= 0 && ratioPassingFilter <= 1;
-      return ratioPassingFilter * 100 < filteredSearchThreshold;
+      float percentPassingFilter = ratioPassingFilter * 100;
+      return percentPassingFilter >= minFilteredSearchThreshold
+          && percentPassingFilter < filteredSearchThreshold;
     }
 
     @Override
@@ -87,12 +116,13 @@ public abstract class KnnSearchStrategy {
       if (this == o) return true;
       if (o == null || getClass() != o.getClass()) return false;
       Hnsw hnsw = (Hnsw) o;
-      return filteredSearchThreshold == hnsw.filteredSearchThreshold;
+      return filteredSearchThreshold == hnsw.filteredSearchThreshold
+          && minFilteredSearchThreshold == hnsw.minFilteredSearchThreshold;
     }
 
     @Override
     public int hashCode() {
-      return Objects.hashCode(filteredSearchThreshold);
+      return Objects.hash(filteredSearchThreshold, minFilteredSearchThreshold);
     }
 
     @Override
@@ -180,7 +210,14 @@ public abstract class KnnSearchStrategy {
     private final HnswQueueSaturationCollector collector;
 
     public Patience(HnswQueueSaturationCollector collector, int filteredSearchThreshold) {
-      super(filteredSearchThreshold);
+      this(collector, filteredSearchThreshold, DEFAULT_MIN_FILTERED_SEARCH_THRESHOLD);
+    }
+
+    public Patience(
+        HnswQueueSaturationCollector collector,
+        int filteredSearchThreshold,
+        int minFilteredSearchThreshold) {
+      super(filteredSearchThreshold, minFilteredSearchThreshold);
       this.collector = collector;
     }
 
@@ -191,7 +228,7 @@ public abstract class KnnSearchStrategy {
 
     @Override
     public int hashCode() {
-      return Objects.hash(super.filteredSearchThreshold, collector);
+      return Objects.hash(super.hashCode(), collector);
     }
 
     @Override
