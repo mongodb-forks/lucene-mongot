@@ -5,6 +5,14 @@ http://s.apache.org/luceneversions
 
 ======================= Lucene-mongot 10.4.0-6 =======================
 
+Optimizations
+---------------------
+* Compute the uint8 dot product and square distance kernels without Vector API conversion
+  operators at every vector width, widening via reinterpret + mask/shift instead. JDK 21's aarch64
+  C2 backend has no match rules for the unsigned (ZERO_EXTEND_*) vector casts, so they fall back to
+  slow Java on 128-bit NEON/SVE2 parts (Graviton2, Graviton4) and on 256-bit SVE parts (Graviton3)
+  alike; the replacement uses only lanewise ops that are always intrinsified. (Shawn Yarbrough)
+
 Bug Fixes
 ---------------------
 * GITHUB#16807 (backport): Fix byte vector dot products and square distances staying several
